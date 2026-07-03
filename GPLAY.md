@@ -38,6 +38,24 @@
 - [bundles list](#bundles-list)
 - [bundles analyze](#bundles-analyze)
 - [bundles compare](#bundles-compare)
+- [checks](#checks)
+- [checks apps](#checks-apps)
+- [checks apps list](#checks-apps-list)
+- [checks apps get](#checks-apps-get)
+- [checks reports](#checks-reports)
+- [checks reports list](#checks-reports-list)
+- [checks reports get](#checks-reports-get)
+- [checks operations](#checks-operations)
+- [checks operations get](#checks-operations-get)
+- [checks operations wait](#checks-operations-wait)
+- [checks operations cancel](#checks-operations-cancel)
+- [checks operations list](#checks-operations-list)
+- [checks operations delete](#checks-operations-delete)
+- [checks upload](#checks-upload)
+- [checks analyze](#checks-analyze)
+- [checks content](#checks-content)
+- [checks content classify](#checks-content-classify)
+- [checks classify](#checks-classify)
 - [apks](#apks)
 - [apks upload](#apks-upload)
 - [apks list](#apks-list)
@@ -930,6 +948,334 @@ When --threshold is set, exits non-zero if the uncompressed delta exceeds it.
 | `--output` | Output format: json (default), table, markdown | `json` |
 | `--pretty` | Pretty-print JSON output | `false` |
 | `--threshold` | Regression threshold in bytes (e.g. 500K, 2M, 1G) | `` |
+
+---
+
+## gplay checks
+
+Analyze app privacy, compliance, and AI safety with the Google Checks API.
+
+```
+gplay checks <subcommand> [flags]
+```
+
+Analyze app privacy, compliance, and AI safety with the Google Checks API.
+
+Checks commands use the https://www.googleapis.com/auth/checks OAuth scope and
+the https://checks.googleapis.com/v1alpha API surface. App bundle analysis uses
+the current media upload endpoint, /upload/v1alpha/{parent=accounts/*/apps/*}/reports:analyzeUpload.
+
+---
+
+## gplay checks apps
+
+List and inspect apps connected to Checks.
+
+```
+gplay checks apps <subcommand> [flags]
+```
+
+---
+
+## gplay checks apps list
+
+List apps under a Checks account.
+
+```
+gplay checks apps list --account <account-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--page-size` | Results per page (1-50) | `10` |
+| `--paginate` | Fetch all pages | `false` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks apps get
+
+Get a Checks app.
+
+```
+gplay checks apps get --account <account-id> --app <app-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks reports
+
+List and inspect Checks compliance reports.
+
+```
+gplay checks reports <subcommand> [flags]
+```
+
+---
+
+## gplay checks reports list
+
+List Checks reports for an app.
+
+```
+gplay checks reports list --account <account-id> --app <app-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--checks-filter` | AIP-160 filter for checks within reports | `` |
+| `--filter` | AIP-160 filter for reports | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--page-size` | Results per page (1-50) | `10` |
+| `--paginate` | Fetch all pages | `false` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks reports get
+
+Get a Checks report.
+
+```
+gplay checks reports get --account <account-id> --app <app-id> --report <report-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--checks-filter` | AIP-160 filter for checks within the report | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--report` | Checks report ID or resource name | `` |
+
+---
+
+## gplay checks operations
+
+Manage Checks app analysis operations.
+
+```
+gplay checks operations <subcommand> [flags]
+```
+
+---
+
+## gplay checks operations get
+
+Get a Checks operation.
+
+```
+gplay checks operations get --account <account-id> --app <app-id> --operation <operation-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--operation` | Operation ID or resource name | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks operations wait
+
+Wait for a Checks operation.
+
+```
+gplay checks operations wait --account <account-id> --app <app-id> --operation <operation-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--operation` | Operation ID or resource name | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--timeout` | Maximum time to wait | `10m0s` |
+
+---
+
+## gplay checks operations cancel
+
+Cancel a Checks operation.
+
+```
+gplay checks operations cancel --account <account-id> --app <app-id> --operation <operation-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--operation` | Operation ID or resource name | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks operations list
+
+List Checks operations for an app.
+
+```
+gplay checks operations list --account <account-id> --app <app-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--filter` | AIP-160 filter for operations | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--page-size` | Results per page (1-50) | `10` |
+| `--paginate` | Fetch all pages | `false` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks operations delete
+
+Delete a Checks operation.
+
+```
+gplay checks operations delete --account <account-id> --app <app-id> --operation <operation-id> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--operation` | Operation ID or resource name | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay checks upload
+
+Upload an app binary for Checks compliance analysis.
+
+```
+gplay checks upload --account <account-id> --app <app-id> --binary <path> [flags]
+```
+
+Upload an APK, AAB, or IPA to the Checks media upload endpoint and start
+an asynchronous compliance analysis.
+
+Use --severity-threshold PRIORITY in CI before release commands to fail the
+pipeline when high-priority failed checks are present. The command polls
+operations.get when --wait is true and prints progress to stderr.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--binary` | Path to APK, AAB, or IPA file | `` |
+| `--binary-type` | App binary file type: ANDROID_APK, ANDROID_AAB, IOS_IPA | `ANDROID_APK` |
+| `--checks-filter` | AIP-160 filter for checks in the resulting report (e.g. state = FAILED) | `` |
+| `--code-ref` | Git commit hash or changelist number for the upload | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--severity-threshold` | Fail if a failed check meets severity: PRIORITY, POTENTIAL, OPPORTUNITY | `` |
+| `--wait` | Wait for analysis to complete and print the report | `true` |
+| `--wait-timeout` | Maximum time to wait for analysis | `10m0s` |
+
+---
+
+## gplay checks analyze
+
+Alias for `gplay checks upload`.
+
+```
+gplay checks analyze --account <account-id> --app <app-id> --binary <path> [flags]
+```
+
+Upload an APK, AAB, or IPA to the Checks media upload endpoint and start
+an asynchronous compliance analysis.
+
+Use --severity-threshold PRIORITY in CI before release commands to fail the
+pipeline when high-priority failed checks are present. The command polls
+operations.get when --wait is true and prints progress to stderr.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Checks account ID (overrides GPLAY_CHECKS_ACCOUNT/checks_account) | `` |
+| `--app` | Checks app ID or resource name | `` |
+| `--binary` | Path to APK, AAB, or IPA file | `` |
+| `--binary-type` | App binary file type: ANDROID_APK, ANDROID_AAB, IOS_IPA | `ANDROID_APK` |
+| `--checks-filter` | AIP-160 filter for checks in the resulting report (e.g. state = FAILED) | `` |
+| `--code-ref` | Git commit hash or changelist number for the upload | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--severity-threshold` | Fail if a failed check meets severity: PRIORITY, POTENTIAL, OPPORTUNITY | `` |
+| `--wait` | Wait for analysis to complete and print the report | `true` |
+| `--wait-timeout` | Maximum time to wait for analysis | `10m0s` |
+
+---
+
+## gplay checks content
+
+Classify app content with Checks AI safety policies.
+
+```
+gplay checks content <subcommand> [flags]
+```
+
+---
+
+## gplay checks content classify
+
+Classify text content against Checks AI safety policies.
+
+```
+gplay checks content classify --text <content> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--classifier-version` | Classifier version: STABLE or LATEST | `` |
+| `--context` | Prompt or context that generated the content | `` |
+| `--language` | ISO 639-1 language code | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--policies` | Comma-separated policies, or all | `all` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--severity-threshold` | Fail if any policy result is VIOLATIVE | `false` |
+| `--text` | Text content to classify, or @file | `` |
+
+---
+
+## gplay checks classify
+
+Classify text content against Checks AI safety policies.
+
+```
+gplay checks classify --text <content> [flags]
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--classifier-version` | Classifier version: STABLE or LATEST | `` |
+| `--context` | Prompt or context that generated the content | `` |
+| `--language` | ISO 639-1 language code | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--policies` | Comma-separated policies, or all | `all` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--severity-threshold` | Fail if any policy result is VIOLATIVE | `false` |
+| `--text` | Text content to classify, or @file | `` |
 
 ---
 

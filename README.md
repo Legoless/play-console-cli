@@ -306,6 +306,30 @@ gplay rtdn decode --file payload.json      # typed subscription/one-time/voided 
 cat payload.json | gplay rtdn decode --file -
 ```
 
+### Compliance (Google Checks)
+
+```bash
+# Upload an AAB/APK to Google Checks for privacy & policy analysis (async)
+# Requires a Checks account: pass --account, or set GPLAY_CHECKS_ACCOUNT / checks_account.
+gplay checks apps list --account <account-id>
+gplay checks analyze --account <account-id> --app <app-id> --binary app.aab
+
+# CI/CD gate: analyze, wait for the report, exit non-zero on high-priority failures.
+# Chain before `gplay publish`/`gplay release` to block non-compliant builds.
+gplay checks analyze --account <account-id> --app <app-id> --binary app.aab \
+  --code-ref "$GIT_SHA" --severity-threshold PRIORITY --checks-filter "state = FAILED"
+
+# Browse compliance reports (verifies what the app *does* vs. what data-safety *declares*)
+gplay checks reports list --account <account-id> --app <app-id> --checks-filter "state = FAILED"
+gplay checks reports get --account <account-id> --app <app-id> --report <report-id>
+
+# Manage the async analysis operation directly
+gplay checks operations wait --account <account-id> --app <app-id> --operation <op-id>
+
+# AI safety content classification (moderate app/generated text against policies)
+gplay checks classify --text @content.txt --policies all --severity-threshold
+```
+
 ### Vitals & Quality
 
 ```bash

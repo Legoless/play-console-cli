@@ -18,6 +18,7 @@ about API constraints when implementing new features.
 5. [Error Response Formats](#error-response-formats)
 6. [Pagination Behavior](#pagination-behavior)
 7. [Upload Behavior](#upload-behavior)
+8. [Google Checks API](#google-checks-api)
 
 ---
 
@@ -349,6 +350,84 @@ unhelpful message. Always set it explicitly based on file extension.
 
 ---
 
+## Google Checks API
+
+**Reference**: [Checks API](https://developers.google.com/checks/reference/rest)
+
+> **Last verified**: April 2026 against Checks API `v1alpha`.
+
+The Google Checks API is separate from the Android Publisher API and uses the
+service endpoint `https://checks.googleapis.com`. All CLI calls must authenticate
+with the `https://www.googleapis.com/auth/checks` OAuth scope.
+
+### Current v1alpha Resources
+
+| Resource | Methods used by `gplay checks` |
+|---|---|
+| `accounts.apps` | `get`, `list` |
+| `accounts.apps.reports` | `get`, `list` |
+| `accounts.apps.operations` | `cancel`, `delete`, `get`, `list`, `wait` |
+| `media` | `upload` |
+| `aisafety` | `classifyContent` |
+
+### App Analysis Upload
+
+Checks binary analysis uses the media upload endpoint:
+
+```
+POST /upload/v1alpha/{parent=accounts/*/apps/*}/reports:analyzeUpload
+```
+
+The request metadata is `GoogleChecksReportV1alphaAnalyzeUploadRequest` and can
+include:
+
+| Field | Detail |
+|---|---|
+| `appBinaryFileType` | `ANDROID_APK`, `ANDROID_AAB`, or `IOS_IPA`. If omitted, the API infers APK for Android apps and IPA for iOS apps. |
+| `codeReferenceId` | Optional git commit hash or changelist number associated with the upload. |
+
+The response is a `google.longrunning.Operation`. For CI-friendly behavior,
+`gplay checks upload --wait` polls `accounts.apps.operations.get` until
+`done=true`, decodes the operation response as a Checks report, and can fail the
+command when a failed report check meets `--severity-threshold`.
+
+### Reports and Filters
+
+Reports are addressed as:
+
+```
+accounts/{account}/apps/{app}/reports/{report}
+```
+
+`reports.list` supports both report-level `filter` and per-report
+`checksFilter` parameters. `reports.get` supports `checksFilter`.
+
+### AI Safety Classification
+
+Checks content classification uses:
+
+```
+POST /v1alpha/aisafety:classifyContent
+```
+
+Requests require an `input` and a non-empty list of policy configs. The
+supported policy types are currently:
+
+- `DANGEROUS_CONTENT`
+- `PII_SOLICITING_RECITING`
+- `HARASSMENT`
+- `SEXUALLY_EXPLICIT`
+- `HATE_SPEECH`
+- `MEDICAL_INFO`
+- `VIOLENCE_AND_GORE`
+- `OBSCENITY_AND_PROFANITY`
+
+The response returns one `policyResult` per requested policy. Treat
+`violationResult == VIOLATIVE` as the failure condition for
+`gplay checks classify --severity-threshold`.
+
+---
+
 ## Further Reading
 
 - [Google Play Developer API Overview](https://developers.google.com/android-publisher)
@@ -356,3 +435,4 @@ unhelpful message. Always set it explicitly based on file extension.
 - [Getting Started Guide](https://developers.google.com/android-publisher/getting_started)
 - [Upload Guide](https://developers.google.com/android-publisher/upload)
 - [Quota & Rate Limits](https://developers.google.com/android-publisher/quotas)
+- [Checks API Reference](https://developers.google.com/checks/reference/rest)
