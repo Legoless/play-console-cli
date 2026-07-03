@@ -130,6 +130,7 @@ type Config struct {
 	MaxRetries           int           `json:"max_retries,omitempty"`
 	RetryDelay           string        `json:"retry_delay,omitempty"`
 	Debug                string        `json:"debug"`
+	ChecksAccount        string        `json:"checks_account,omitempty"`
 }
 
 const maxConfigRetries = 30

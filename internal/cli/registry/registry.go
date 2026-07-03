@@ -13,6 +13,7 @@ import (
 	"github.com/tamtom/play-console-cli/internal/cli/availability"
 	"github.com/tamtom/play-console-cli/internal/cli/baseplans"
 	"github.com/tamtom/play-console-cli/internal/cli/bundles"
+	"github.com/tamtom/play-console-cli/internal/cli/checks"
 	"github.com/tamtom/play-console-cli/internal/cli/completion"
 	"github.com/tamtom/play-console-cli/internal/cli/datasafety"
 	"github.com/tamtom/play-console-cli/internal/cli/deobfuscation"
@@ -92,6 +93,7 @@ func Subcommands(version string) []*ffcli.Command {
 func SubcommandsWithRuntime(version string, rt *cliruntime.Runtime) []*ffcli.Command {
 	return []*ffcli.Command{
 		auth.AuthCommand(),
+		auth.SetupCommand(),
 		apps.AppsCommand(rt),
 		auditcmd.AuditCommand(),
 		quota.QuotaCommand(),
@@ -100,6 +102,7 @@ func SubcommandsWithRuntime(version string, rt *cliruntime.Runtime) []*ffcli.Com
 		rtdncmd.RtdnCommand(),
 		edits.EditsCommand(),
 		bundles.BundlesCommand(),
+		checks.ChecksCommand(),
 		apks.APKsCommand(),
 		tracks.TracksCommand(),
 		users.UsersCommand(),

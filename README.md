@@ -1,4 +1,4 @@
-# Google Play Console CLI (gplay) optimized for your AI agentic development flows, claude code, codex
+# gplay — Google Play Console CLI for AI Agents
 
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go" alt="Go Version">
@@ -6,130 +6,20 @@
   <img src="https://img.shields.io/badge/Homebrew-compatible-blue?style=for-the-badge" alt="Homebrew">
 </p>
 
-A **fast**, **lightweight**, and **scriptable** CLI for Google Play Console. Automate your Android app workflows from your terminal,optimized for your AI agentic development flows, claude code, codex, cursor
+**gplay** is a fast, single-binary CLI for **Google Play Console**, built for **AI coding agents** — Claude Code, Codex, Cursor, Gemini CLI — and for humans who script. Release Android apps, create **subscriptions, in-app products, and one-time purchases**, verify purchases server-side, monitor crashes and reviews — all from the terminal, no Play Console clicking.
 
-## Why gplay?
-
-Stop clicking through Play Console. Ship your Android apps with a single command.
-
-### Where gplay wins
-
-Compared against [Fastlane `supply`](https://docs.fastlane.tools/actions/supply/) and [gradle-play-publisher (GPP)](https://github.com/Triple-T/gradle-play-publisher). Areas where all three wrap the same Play Publisher API equivalently (APK/AAB upload, tracks, staged rollout, release notes, store listing text fields, app details, screenshots, mapping files, internal app sharing) are omitted.
-
-**API coverage gplay has that the others lack**
-
-| Capability | gplay | Fastlane | gradle-play-publisher |
-|---|---|---|---|
-| **Monetization depth** | IAPs, subscriptions, base plans, offers, pricing | No support | Basic IAPs + subscriptions (no base plans or offers) |
-| **Purchase verification** | Products + subscriptions + acknowledge + orders refund | No support | No support |
-| **Vitals (crashes, ANRs, perf)** | Clusters, reports, startup/rendering/battery metrics | No support | No support |
-| **Review management** | Read + reply | No support | No support |
-| **Financial & stats reports** | GCS download (earnings, sales, installs, ratings) | No support | No support |
-| **User & permission management** | Developer users + per-app grants CRUD | No support | No support |
-| **Tester management** | List and update closed-track tester emails | No support | No support |
-| **Data safety** | Declarations management | No support | No support |
-| **Webhook notifications** | Slack, Discord, generic (`gplay notify`) | No support | No support |
-
-**Runtime and ergonomics**
-
-| Capability | gplay | Fastlane | gradle-play-publisher |
-|---|---|---|---|
-| **Runtime** | Compiled Go binary, instant startup, no deps | Ruby + gems + bundler, slow to load | JVM + Gradle daemon, must run inside an AGP project |
-| **Agent-friendly output** | JSON by default (saves tokens) | Human-oriented, colorized | Gradle task logs |
-
-**Publish & Release**
-- One-command releases: upload, configure track, and go live in a single step
-- Staged rollouts with pause, resume, and percentage control
-- Promote builds between tracks (internal → beta → production)
-- Generate release notes automatically from your git history
-- Upload bundles (AAB) or APKs, manage edits, and commit changes
-
-**Store Presence**
-- Update store listings, screenshots, and app details across all locales
-- Manage images: phone screenshots, tablet screenshots, feature graphics, and more
-- Sync metadata with your local directory — export, import, and diff
-- Migrate from Fastlane metadata format with a single command
-- Validate listings, screenshots, and bundles before you submit
-- Manage data safety declarations
-
-**Monetization**
-- In-app products: create, update, and batch-manage managed products
-- One-time products for single purchases
-- Subscriptions with base plans and promotional offers
-- Price conversion across regions
-- External transaction reporting (EU compliance)
-
-**Purchases & Orders**
-- Verify in-app purchases and subscription tokens server-side
-- Look up and refund orders
-- Acknowledge purchases programmatically
-
-**Monitor Your App**
-- Crash clusters and detailed crash reports
-- ANR and error issue tracking
-- Performance metrics: startup time, rendering jank, and battery drain
-- Read and reply to user reviews without opening a browser
-
-**Testing & Distribution**
-- Manage testers for closed testing tracks
-- Internal app sharing for quick testing without review
-- Check country availability for your tracks
-- Download device-specific APKs generated from your app bundle
-- Upload deobfuscation files (ProGuard/R8 mapping) for readable crash reports
-- System APK creation and expansion file (OBB) management
-- App recovery actions
-
-**Team & Permissions**
-- Manage developer account users: invite, update roles, or remove
-- Fine-grained per-app permission grants
-- Multiple profiles for different accounts or apps
-
-**Reports & Notifications**
-- Download financial reports (earnings, sales, payouts) from Google Cloud Storage
-- Download statistics reports (installs, ratings, crashes, store performance)
-- Send release notifications to Slack, Discord, or any webhook
-
-**Built for Automation**
-- Works in any CI/CD pipeline — GitHub Actions, GitLab CI, Jenkins, and more
-- JSON output by default — pipe to `jq`, scripts, or dashboards
-- Table and Markdown output for human-friendly views
-- Dry-run mode to preview changes before they go live
-- Shell completions for Bash, Zsh, Fish, and PowerShell
-- Self-updating: checks for new versions and upgrades in place
-- Instant startup: single binary, no dependencies, no runtime
-- Project initialization and auth diagnostics (`init`, `auth doctor`)
-- Auto-generated command documentation (`docs generate`)
-- Device tier configuration management
+It **completely replaces opening the web browser console** for day-to-day work. Most deployment tools only handle standard AAB uploads — gplay covers the **full Google Play Developer API v3**: complete console management, staged rollouts, store listings, screenshots, and localization. And it's **lightweight with zero runtime to install** — no Node.js, no Python, no JVM, just one static binary.
 
 ## Table of Contents
 
-- [Why gplay?](#why-gplay)
 - [Quick Start](#quick-start)
-- [Commands](#commands)
-  - [Scripting Tips](#scripting-tips)
-  - [Publishing](#publishing)
-  - [High-Level Workflow](#high-level-workflow)
-  - [Store Listing](#store-listing)
-  - [Monetization](#monetization)
-  - [Purchase Management](#purchase-management)
-  - [Reviews](#reviews)
-  - [Testing](#testing)
-  - [App Management](#app-management)
-  - [Diagnostics & Observability](#diagnostics--observability)
-  - [Vitals & Quality](#vitals--quality)
-  - [User & Permission Management](#user--permission-management)
-  - [Reports](#reports)
-  - [Notifications](#notifications)
-  - [FastLane Integration](#fastlane-integration)
-- [Output Formats](#output-formats)
-- [Design Philosophy](#design-philosophy)
-- [Installation](#installation)
-- [Authentication](#authentication)
-- [Configuration](#configuration)
-- [CI/CD Integration](#cicd-integration)
-- [Security](#security)
+  - [Install](#install)
+  - [Authentication](#authentication)
+- [Highlights](#highlights)
+- [Use it with your AI agent](#use-it-with-your-ai-agent)
+- [How gplay compares](#how-gplay-compares)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
-- [Agent Skills](#agent-skills)
 - [License](#license)
 
 ## Quick Start
@@ -137,40 +27,48 @@ Compared against [Fastlane `supply`](https://docs.fastlane.tools/actions/supply/
 ### Install
 
 ```bash
-# Via Homebrew (recommended)
+# Homebrew (recommended)
 brew tap tamtom/tap
 brew install tamtom/tap/gplay
 
 # Install script (macOS/Linux)
 curl -fsSL https://raw.githubusercontent.com/tamtom/play-console-cli/main/install.sh | bash
 
-# Build from source
-git clone https://github.com/tamtom/play-console-cli.git
-cd play-console-cli
-make build
-./gplay --help
+# From source
+git clone https://github.com/tamtom/play-console-cli.git && cd play-console-cli && make build
 ```
 
-### Updates
+**Update:** `gplay update` self-updates in place. It also checks for new versions on startup (disable with `GPLAY_NO_UPDATE=1`).
 
-`gplay` checks for updates on startup and shows upgrade hints. Disable with `--no-update` or `GPLAY_NO_UPDATE=1`.
+### Authentication
 
-### Authenticate (Service Account)
+`gplay` authenticates to Google Play with a **service account**.
 
-**Fastest path — automated setup (recommended):**
+#### One-command setup (recommended)
 
 ```bash
-# One command: creates a GCP service account, enables the API, downloads the key,
-# and wires the profile into ~/.gplay/config.json.
-gplay auth setup --auto --project <your-gcp-project-id>
-
-# Preview the gcloud commands without running them
-gplay auth setup --auto --project <your-gcp-project-id> --dry-run
+gplay setup --auto
 ```
 
-Requirements: `gcloud` installed and authenticated (`gcloud auth login`). After the wizard finishes, it prints a Play Console link to grant the service account access — that's the only manual step left.
+That's it. This will:
+- Install `gcloud` if needed (via Homebrew on macOS, or curl on Linux)
+- Log you into Google Cloud
+- Create a service account and download credentials
+- Open Play Console for the one manual step (granting access)
+- Configure everything automatically
 
-**Manual path — full control:**
+Pass `--project <id>` if `gcloud` has no default project, `--dry-run` to preview the commands, or `--no-browser` for CI/agent runs. Then verify with `gplay auth doctor`.
+
+Already have a service account key?
+
+```bash
+gplay auth login --service-account /path/to/service-account.json
+```
+
+#### Manual setup
+
+<details>
+<summary>Set up the service account by hand (full control)</summary>
 
 **Step 1: Create a Google Cloud Project**
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
@@ -206,563 +104,84 @@ gplay auth login --service-account /path/to/service-account.json
 gplay auth doctor
 ```
 
-## Commands
+</details>
 
-### Scripting Tips
+Profiles for multiple accounts and troubleshooting: **[docs/authentication.md](docs/authentication.md)**
 
-- JSON output is default for easy parsing; add `--pretty` when debugging
-- Use `--paginate` to automatically fetch all pages
-- Sort with `--sort` (prefix `-` for descending): `--sort -uploadedDate`
-- Use `--limit` + `--next` for manual pagination control
-
-### Publishing
+Once authenticated, you're ready to go:
 
 ```bash
-# Edit lifecycle
-gplay edits create --package com.example.app
-gplay edits list --package com.example.app
-gplay edits validate --package com.example.app --edit <id>
-gplay edits commit --package com.example.app --edit <id>
+# Ship a release in one command
+gplay release --package com.example.app --track production --bundle app.aab --rollout 10
 
-# Upload artifacts
-gplay bundles upload --package com.example.app --edit <id> --file app.aab
-gplay apks upload --package com.example.app --edit <id> --file app.apk
-
-# Manage tracks
-gplay tracks list --package com.example.app --edit <id>
-gplay tracks get --package com.example.app --edit <id> --track production
-gplay tracks update --package com.example.app --edit <id> --track internal --json @release.json
-```
-
-### High-Level Workflow
-
-```bash
-# One-command release (creates edit, uploads, updates track, commits)
-gplay release --package com.example.app --track internal --bundle app.aab
-
-# With release notes and staged rollout
-gplay release --package com.example.app --track production --bundle app.aab \
-  --release-notes @notes.json --rollout 10
-
-# Promote between tracks
-gplay promote --package com.example.app --from internal --to beta
-
-# Manage staged rollout
-gplay rollout update --package com.example.app --track production --rollout 50
-gplay rollout halt --package com.example.app --track production
-gplay rollout resume --package com.example.app --track production
-gplay rollout complete --package com.example.app --track production
-
-# Release with metadata and screenshots
-gplay release --package com.example.app --track production --bundle app.aab \
-  --listings-dir ./metadata --screenshots-dir ./screenshots
-
-# Dry-run any command (intercepts write operations)
-gplay --dry-run release --package com.example.app --track internal --bundle app.aab
-```
-
-### App Management
-
-```bash
-# List apps accessible by your service account
-gplay apps list
-
-# Initialize project configuration
-gplay init
-gplay init --package com.example.app --service-account /path/to/sa.json
-```
-
-### Diagnostics & Observability
-
-```bash
-# Full environment health check (16 checks: gcloud, config, SA, DNS, disk, clock, ...)
-gplay doctor
-gplay doctor --output json --pretty
-
-# Offline compliance scan on an AAB or APK (no API calls)
-# Checks: manifest, bundle size, native ABIs, dex, debuggable, testOnly,
-# cleartext traffic, dangerous permissions, secret scan, misplaced files.
-gplay preflight --file app.aab
-gplay preflight --file app.aab --max-size 100M --fail-on warning   # CI gate
-
-# Bundle size analysis (offline)
-gplay bundles analyze --file app.aab --top-files 20
-gplay bundles compare --base old.aab --candidate new.aab --threshold 2M
-
-# Local audit log of every invocation (auto-written to ~/.gplay/audit.log)
-gplay audit list --limit 50
-gplay audit search --command vitals --status error
-gplay audit clear --confirm
-# Disable with GPLAY_AUDIT=0; override path with GPLAY_AUDIT_LOG.
-
-# API quota usage (derived from audit log)
-gplay quota status                 # daily + per-minute windows
-gplay quota status --top 10
-
-# Real-Time Developer Notifications (RTDN)
-gplay rtdn setup --project <gcp-project> --topic play-rtdn
-gplay rtdn status --project <gcp-project>
-gplay rtdn decode --file payload.json      # typed subscription/one-time/voided decoder
-cat payload.json | gplay rtdn decode --file -
-```
-
-### Vitals & Quality
-
-```bash
-# Crash reports
-gplay vitals crashes clusters --package com.example.app
-gplay vitals crashes reports --package com.example.app
-
-# Performance metrics
-gplay vitals performance startup --package com.example.app
-gplay vitals performance rendering --package com.example.app
-gplay vitals performance battery --package com.example.app
-
-# Error tracking
-gplay vitals errors issues --package com.example.app
-gplay vitals errors reports --package com.example.app
-```
-
-### User & Permission Management
-
-```bash
-# Manage developer account users
-gplay users list --developer <id>
-gplay users create --developer <id> --email user@example.com --json @permissions.json
-gplay users delete --developer <id> --email user@example.com --confirm
-
-# Manage per-app grants
-gplay grants create --developer <id> --email user@example.com --package com.example.app --json @grant.json
-gplay grants update --developer <id> --email user@example.com --package com.example.app --json @grant.json
-gplay grants delete --developer <id> --email user@example.com --package com.example.app --confirm
-```
-
-### Reports
-
-Reports are stored as CSV/ZIP files in Google Cloud Storage buckets (`pubsite_prod_rev_<developer_id>`). The service account must have access to the GCS bucket (granted automatically when added to Play Console).
-
-> **Important:** The `--developer` ID for reports is **not** the developer ID in your Play Console URL. To find the correct ID, go to **Play Console > Download reports > Copy Cloud Storage URI**. The URI looks like `gs://pubsite_prod_rev_XXXX/` — the number after `pubsite_prod_rev_` is your developer ID.
-
-```bash
-# Financial reports (earnings, sales, payouts)
-gplay reports financial list --developer <id>
-gplay reports financial list --developer <id> --type earnings --from 2026-01 --to 2026-06
-gplay reports financial download --developer <id> --from 2026-01 --type earnings --dir ./reports
-
-# Statistics reports (installs, ratings, crashes, store_performance, subscriptions)
-gplay reports stats list --developer <id>
-gplay reports stats list --developer <id> --package com.example.app --type installs
-gplay reports stats download --developer <id> --package com.example.app --from 2026-01 --type installs --dir ./reports
-```
-
-### Notifications
-
-```bash
-# Send webhook notifications (Slack, Discord, generic)
-gplay notify send --webhook-url https://hooks.slack.com/... --message "Deploy complete" --format slack
-gplay notify send --webhook-url https://discord.com/... --message "New release" --format discord
-```
-
-### Store Listing
-
-```bash
-# Listings
-gplay listings list --package com.example.app --edit <id>
-gplay listings get --package com.example.app --edit <id> --locale en-US
-gplay listings update --package com.example.app --edit <id> --locale en-US --json @listing.json
-
-# Images
-gplay images list --package com.example.app --edit <id> --locale en-US --type phoneScreenshots
-gplay images upload --package com.example.app --edit <id> --locale en-US --type phoneScreenshots --file screenshot.png
-
-# App details
-gplay details get --package com.example.app --edit <id>
-gplay details update --package com.example.app --edit <id> --contact-email dev@example.com
-```
-
-### Monetization
-
-```bash
-# In-app products
-gplay iap list --package com.example.app
-gplay iap create --package com.example.app --sku premium_upgrade --json @product.json
-gplay iap update --package com.example.app --sku premium_upgrade --json @product.json
-gplay iap batch-update --package com.example.app --json @products.json
-
-# Subscriptions
-gplay subscriptions list --package com.example.app
+# Create a subscription with base plans and offers
 gplay subscriptions create --package com.example.app --json @subscription.json
 
-# Base plans
-gplay baseplans activate --package com.example.app --product-id sub_premium --base-plan monthly
-gplay baseplans deactivate --package com.example.app --product-id sub_premium --base-plan monthly
-
-# Offers
-gplay offers list --package com.example.app --product-id sub_premium --base-plan monthly
-gplay offers create --package com.example.app --product-id sub_premium --base-plan monthly --json @offer.json
-
-# Price conversion
-gplay pricing convert --package com.example.app --json @price.json
+# Everything outputs minified JSON — built for agents and pipes
+gplay reviews list --package com.example.app | jq '.reviews[0]'
 ```
 
-### Purchase Management
-
-```bash
-# Verify purchases
-gplay purchases products get --package com.example.app --product-id premium --token <token>
-gplay purchases products acknowledge --package com.example.app --product-id premium --token <token>
-gplay purchases subscriptions get --package com.example.app --token <token>
-
-# Orders
-gplay orders get --package com.example.app --order-id <id>
-gplay orders refund --package com.example.app --order-id <id> --revoke
-
-# External transactions (EU compliance)
-gplay external-transactions create --package com.example.app --json @transaction.json
-```
-
-### Reviews
-
-```bash
-# List and filter reviews
-gplay reviews list --package com.example.app
-gplay reviews list --package com.example.app --paginate
-
-# Reply to reviews
-gplay reviews get --package com.example.app --review-id <id>
-gplay reviews reply --package com.example.app --review-id <id> --text "Thank you!"
-```
-
-### Testing
-
-```bash
-# Manage testers
-gplay testers list --package com.example.app --edit <id> --track internal
-gplay testers update --package com.example.app --edit <id> --track internal --emails user@example.com
-
-# Internal app sharing (quick sharing without review)
-gplay internal-sharing upload-bundle --package com.example.app --file app.aab
-gplay internal-sharing upload-apk --package com.example.app --file app.apk
-```
-
-### FastLane Integration
-
-```bash
-# Export metadata to FastLane format
-gplay sync export-listings --package com.example.app --dir ./fastlane/metadata/android
-
-# Import metadata from FastLane format
-gplay sync import-listings --package com.example.app --dir ./fastlane/metadata/android
-
-# Compare local metadata with Play Store
-gplay sync diff-listings --package com.example.app --dir ./fastlane/metadata/android
-
-# Validate before upload
-gplay validate listing --dir ./fastlane/metadata/android --locale en-US
-gplay validate screenshots --dir ./fastlane/metadata/android/en-US/images
-gplay validate bundle --file app.aab
-```
-
-### Shell Completion
-
-```bash
-# Bash
-gplay completion bash > /etc/bash_completion.d/gplay
-
-# Zsh
-gplay completion zsh > "${fpath[1]}/_gplay"
-
-# Fish
-gplay completion fish > ~/.config/fish/completions/gplay.fish
-
-# PowerShell
-gplay completion powershell >> $PROFILE
-```
-
-## Output Formats
-
-| Format | Flag | Use Case |
-|--------|------|----------|
-| JSON (minified) | default | Scripting, automation |
-| JSON (pretty) | `--pretty` | Debugging |
-| Table | `--output table` | Terminal display |
-| Markdown | `--output markdown` | Documentation |
-
-```bash
-# Parse with jq
-gplay tracks list --package com.example.app | jq '.tracks[].track'
-
-# Human-readable
-gplay reviews list --package com.example.app --output table
-```
-
-## Design Philosophy
-
-### Explicit Over Cryptic
-
-```bash
-# Good - self-documenting
-gplay reviews list --package com.example.app --output table
-
-# Avoid - cryptic flags (not supported)
-# gplay reviews -p com.example.app -o table
-```
-
-### JSON-First Output
-
-All commands output minified JSON by default for easy parsing:
-
-```bash
-gplay tracks list --package com.example.app | jq '.tracks[] | select(.track == "production")'
-```
-
-### No Interactive Prompts
-
-Everything is flag-based for automation:
-
-```bash
-# Non-interactive (CI/CD safe)
-gplay edits delete --package com.example.app --edit <id> --confirm
-```
-
-## Installation
-
-### Homebrew (macOS)
-
-```bash
-brew tap tamtom/tap
-brew install tamtom/tap/gplay
-```
-
-### Install Script (macOS/Linux)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tamtom/play-console-cli/main/install.sh | bash
-```
-
-Specify version:
-```bash
-GPLAY_VERSION=1.0.0 curl -fsSL https://raw.githubusercontent.com/tamtom/play-console-cli/main/install.sh | bash
-```
-
-### From Source
-
-```bash
-git clone https://github.com/tamtom/play-console-cli.git
-cd play-console-cli
-make build
-make install  # Installs to /usr/local/bin
-```
-
-## Authentication
-
-### Service Account Setup (Required)
-
-Service accounts are required for the Google Play Android Developer API.
-
-#### 1. Create Google Cloud Project & Enable API
-
-```
-Google Cloud Console → Create Project → APIs & Services → Library
-→ Search "Google Play Android Developer API" → Enable
-```
-
-#### 2. Create Service Account & Download Key
-
-```
-IAM & Admin → Service Accounts → Create Service Account
-→ Name it (e.g., "gplay-cli") → Create → Done
-→ Click the account → Keys → Add Key → Create new key → JSON
-→ Save the JSON file securely (never commit to git!)
-```
-
-#### 3. Grant Access in Play Console
-
-```
-Play Console → Users and permissions → Invite new users
-→ Paste service account email (from JSON: "client_email" field)
-→ Set permissions (Admin, or per-app access)
-→ Invite user
-```
-
-#### 4. Configure gplay
-
-```bash
-# Option A: Login command (saves to profile)
-gplay auth login --service-account /path/to/service-account.json
-
-# Option B: Environment variable
-export GPLAY_SERVICE_ACCOUNT=/path/to/service-account.json
-
-# Verify setup
-gplay auth doctor
-```
-
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `GPLAY_SERVICE_ACCOUNT` | Path to service account JSON |
-| `GPLAY_PACKAGE` | Default package name |
-| `GPLAY_PROFILE` | Active profile name |
-| `GPLAY_TIMEOUT` | Request timeout (e.g., `90s`, `2m`) |
-| `GPLAY_UPLOAD_TIMEOUT` | Upload timeout (e.g., `5m`, `10m`) |
-| `GPLAY_NO_UPDATE` | Disable update checks (set to `1`) |
-| `GPLAY_DEBUG` | Enable debug logging (`1` or `api`) |
-| `GPLAY_MAX_RETRIES` | Max retries for failed requests |
-| `GPLAY_RETRY_DELAY` | Base delay between retries |
-| `GPLAY_DEFAULT_OUTPUT` | Default output format (`json`, `table`, `markdown`) |
-
-## Configuration
-
-### Config File
-
-Global: `~/.gplay/config.yaml`
-Local (takes precedence): `./.gplay/config.yaml`
-
-```yaml
-default_package: com.example.app
-timeout: 120s
-upload_timeout: 5m
-max_retries: 3
-debug: false
-```
-
-### Profiles
-
-```bash
-# Add profiles for different accounts/apps
-gplay auth login --profile work --service-account /path/to/work-sa.json
-gplay auth login --profile personal --service-account /path/to/personal-sa.json
-
-# Switch default profile
-gplay auth switch --profile work
-
-# Check current status
-gplay auth status
-
-# Use specific profile for a command
-GPLAY_PROFILE=personal gplay tracks list --package com.example.app
-```
-
-## CI/CD Integration
-
-### GitHub Actions
-
-```yaml
-name: Deploy to Play Store
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up gplay
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/tamtom/play-console-cli/main/install.sh | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Build app
-        run: ./gradlew bundleRelease
-
-      - name: Deploy to internal track
-        env:
-          GPLAY_SERVICE_ACCOUNT: ${{ secrets.PLAY_SERVICE_ACCOUNT }}
-        run: |
-          gplay release \
-            --package com.example.app \
-            --track internal \
-            --bundle app/build/outputs/bundle/release/app-release.aab
-```
-
-### GitLab CI
-
-```yaml
-deploy:
-  stage: deploy
-  image: ubuntu:latest
-  before_script:
-    - curl -fsSL https://raw.githubusercontent.com/tamtom/play-console-cli/main/install.sh | bash
-    - export PATH="$HOME/.local/bin:$PATH"
-  script:
-    - gplay release --package $PACKAGE_NAME --track internal --bundle app.aab
-  variables:
-    GPLAY_SERVICE_ACCOUNT: $PLAY_SERVICE_ACCOUNT
-```
-
-## Security
-
-- **Never commit service account keys** to version control
-- **Use environment variables** or secrets management in CI/CD
-- **Limit service account permissions** to only what's needed
-- **Rotate keys regularly**
-- **Use separate service accounts** for different environments
-
-Credentials are stored in config with file path reference only (not the key content).
-
-## How to test in <10 minutes
-
-```bash
-make tools   # installs gofumpt + golangci-lint
-make format
-make lint
-make test
-make build
-./gplay --help
-```
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-## Documentation
-
-- [Agents.md](Agents.md) - Guidelines for AI agents (CLI usage, structure, patterns)
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-
-## Agent Skills
-
-Use `gplay` with AI coding agents for assisted Android publishing workflows. Compatible with any agent that supports the [Agent Skills](https://github.com/anthropics/agent-skills) format.
-
-### Install Skills
+## Highlights
+
+- **Full Google Play Developer API v3 coverage** — not just AAB uploads like most deployment tools. Complete console management from the terminal, so gplay replaces opening the web browser console.
+- **Complete releases & rollouts** — upload, track assignment, staged rollout with pause/resume/percentage control, promote between tracks, release notes from git history.
+- **Store listings, screenshots & localization** — manage listing text, images, and metadata across every locale; sync with a local directory or Fastlane.
+- **Full monetization stack** — subscriptions, base plans, promotional offers, in-app products, one-time purchases, regional price conversion. Pairs with [RevenueCat](docs/monetization.md#using-gplay-with-revenuecat): create products in Play with `gplay`, import them into RevenueCat.
+- **Purchase verification** — verify tokens, acknowledge purchases, refund orders, decode RTDN webhooks.
+- **App health** — crash clusters, ANRs, performance vitals, review replies, financial & statistics reports.
+- **AI-agent native** — minified JSON output, explicit flags, `--help` everywhere, `--dry-run` for every write, no interactive prompts, [Agent Skills](docs/ai-agents.md) included.
+- **Lightweight, zero runtime to install** — a single compiled Go binary with instant startup. No Node.js, no Python, no JVM, no Gradle project required.
+
+## Use it with your AI agent
+
+Every command is discoverable via `--help`, outputs token-efficient JSON, and never blocks on a prompt — so agents can drive the whole Play workflow. Install the ready-made skills:
 
 ```bash
 npx skills add tamtom/gplay-cli-skills
 ```
 
-### Available Skills
+Then ask your agent things like *"release this AAB to internal"*, *"create monthly + yearly subscriptions with a 7-day trial and convert prices for all regions"*, or *"summarize this week's crash clusters"*. Full guide: **[docs/ai-agents.md](docs/ai-agents.md)**
 
-| Skill | Description |
-|-------|-------------|
-| `gplay-cli-usage` | Guidance for running gplay commands (flags, pagination, output, auth) |
-| `gplay-release-flow` | End-to-end release workflows for internal, beta, and production tracks |
-| `gplay-gradle-build` | Build, sign, and package Android apps with Gradle before uploading |
-| `gplay-metadata-sync` | Metadata and localization sync (including FastLane format) |
-| `gplay-rollout-management` | Staged rollout orchestration and monitoring |
-| `gplay-review-management` | Review monitoring, filtering, and automated responses |
-| `gplay-iap-setup` | In-app products, subscriptions, base plans, and offers |
-| `gplay-purchase-verification` | Server-side purchase verification |
-| `gplay-testers-orchestration` | Beta testing groups and tester management |
-| `gplay-signing-setup` | Android app signing, keystores, and Play App Signing |
-| `gplay-vitals-monitoring` | App vitals monitoring for crashes, errors, and performance |
-| `gplay-user-management` | Developer account user and permission grant management |
-| `gplay-migrate-fastlane` | Migration from Fastlane metadata to gplay format |
-| `gplay-reports-download` | Financial and statistics report listing/downloading from GCS |
+## How gplay compares
 
-Skills repository: [github.com/tamtom/gplay-cli-skills](https://github.com/tamtom/gplay-cli-skills)
+Versus [Fastlane `supply`](https://docs.fastlane.tools/actions/supply/) and [gradle-play-publisher](https://github.com/Triple-T/gradle-play-publisher) (all three cover AAB/APK upload, tracks, rollouts, and listings equivalently):
+
+| Capability | gplay | Fastlane supply | gradle-play-publisher |
+|---|---|---|---|
+| Subscriptions, base plans, offers, one-time purchases | ✅ Full | ❌ | ⚠️ Basic (no base plans/offers) |
+| Purchase verification, orders, refunds | ✅ | ❌ | ❌ |
+| Vitals: crashes, ANRs, performance | ✅ | ❌ | ❌ |
+| Reviews: read + reply | ✅ | ❌ | ❌ |
+| Financial & statistics reports | ✅ | ❌ | ❌ |
+| Users & permission grants | ✅ | ❌ | ❌ |
+| Google Checks compliance gate | ✅ | ❌ | ❌ |
+| AI-agent-friendly output | ✅ JSON default | ❌ Human logs | ❌ Gradle logs |
+| Runtime | Single Go binary | Ruby + gems | JVM + Gradle project |
+
+## Documentation
+
+| Guide | What's inside |
+|-------|---------------|
+| **[Command reference (GPLAY.md)](GPLAY.md)** | Every command and flag, auto-generated |
+| [Authentication](docs/authentication.md) | Service account setup, profiles, `auth doctor` |
+| [Releasing](docs/releasing.md) | Releases, rollouts, listings, testers, pre-submission checks, Fastlane interop |
+| [Monetization](docs/monetization.md) | Subscriptions, IAP, one-time purchases, pricing, purchase verification, RevenueCat |
+| [Monitoring & operations](docs/monitoring.md) | Vitals, reviews, reports, users, notifications, diagnostics |
+| [AI agents](docs/ai-agents.md) | Agent setup, skills, example prompts |
+| [Configuration](docs/configuration.md) | Config file, env vars, output formats, shell completion |
+| [CI/CD](docs/ci-cd.md) | GitHub Actions, GitLab CI, release gates |
+| [Contributing](CONTRIBUTING.md) | Development setup, testing, PR guidelines |
+
+## Contributing
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Quick local check: `make dev` (format + lint + test + build).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
 
 ---
 
 <p align="center">
-  Built with Go and the <a href="https://github.com/peterbourgon/ff">ffcli</a> framework
+  Built with Go and <a href="https://github.com/peterbourgon/ff">ffcli</a>
 </p>
