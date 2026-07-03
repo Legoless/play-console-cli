@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -24,16 +25,28 @@ const (
 	defaultProfileName  = "default"
 )
 
-// gcloudRunner is the subset of exec functionality the setup flow uses.
-// It exists so tests can stub out `gcloud` calls without running the real CLI.
+// gcloudRunner is the subset of host functionality the setup flow uses.
+// It exists so tests can stub out `gcloud`, the installer, the browser, and
+// the clipboard without touching the real system.
 type gcloudRunner interface {
 	LookPath(string) (string, error)
+	// Run executes a command and captures its stdout.
 	Run(ctx context.Context, stdin []byte, name string, args ...string) (stdout []byte, err error)
+	// RunInteractive executes a command wired to the user's stdio (for
+	// browser-based flows like `gcloud auth login`).
+	RunInteractive(ctx context.Context, name string, args ...string) error
+	// InstallGcloud installs the gcloud CLI for the current platform.
+	InstallGcloud(ctx context.Context) error
+	// OpenBrowser opens url in the default browser (best-effort).
+	OpenBrowser(url string) error
+	// Copy places text on the system clipboard (best-effort).
+	Copy(text string) error
 }
 
 type realRunner struct{}
 
 func (realRunner) LookPath(name string) (string, error) { return exec.LookPath(name) }
+
 func (realRunner) Run(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	if stdin != nil {
@@ -48,9 +61,76 @@ func (realRunner) Run(ctx context.Context, stdin []byte, name string, args ...st
 	return out, nil
 }
 
+func (realRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func (realRunner) InstallGcloud(ctx context.Context) error {
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("brew"); err == nil {
+			return runInherit(ctx, "brew", "install", "--cask", "google-cloud-sdk")
+		}
+		return runInherit(ctx, "bash", "-c", "curl -fsSL https://sdk.cloud.google.com | bash -s -- --disable-prompts")
+	case "linux":
+		return runInherit(ctx, "bash", "-c", "curl -fsSL https://sdk.cloud.google.com | bash -s -- --disable-prompts")
+	default:
+		return fmt.Errorf("automatic gcloud install is not supported on %s", runtime.GOOS)
+	}
+}
+
+func (realRunner) OpenBrowser(url string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Start()
+	case "linux":
+		return exec.Command("xdg-open", url).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+}
+
+func (realRunner) Copy(text string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("pbcopy")
+	case "linux":
+		cmd = exec.Command("xclip", "-selection", "clipboard")
+	case "windows":
+		cmd = exec.Command("clip")
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
+
+func runInherit(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// SetupCommand wires the top-level `gplay setup [--auto]`.
+func SetupCommand() *ffcli.Command {
+	return newSetupCommand("setup", "gplay setup --auto [flags]")
+}
+
 // AuthSetupCommand wires `gplay auth setup [--auto]`.
 func AuthSetupCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("auth setup", flag.ExitOnError)
+	return newSetupCommand("auth setup", "gplay auth setup --auto [--project <id>] [flags]")
+}
+
+func newSetupCommand(flagSetName, shortUsage string) *ffcli.Command {
+	fs := flag.NewFlagSet(flagSetName, flag.ExitOnError)
 	auto := fs.Bool("auto", false, "Automate GCP service-account creation using gcloud")
 	project := fs.String("project", "", "GCP project ID (defaults to gcloud default)")
 	saName := fs.String("sa-name", defaultSAName, "Service account name")
@@ -58,29 +138,31 @@ func AuthSetupCommand() *ffcli.Command {
 	keyOut := fs.String("key-out", "", "Path to write the service-account JSON (defaults to ~/.gplay/<sa>.json)")
 	dryRun := fs.Bool("dry-run", false, "Print the gcloud commands without executing them")
 	setDefault := fs.Bool("set-default", true, "Set as default profile in config")
+	noBrowser := fs.Bool("no-browser", false, "Do not open a browser (for login or the Play Console grant step)")
+	noInstall := fs.Bool("no-install", false, "Do not auto-install gcloud when it is missing")
 	output := fs.String("output", "text", "Output format: text (default), json")
 	pretty := fs.Bool("pretty", false, "Pretty-print JSON output")
 
 	return &ffcli.Command{
 		Name:       "setup",
-		ShortUsage: "gplay auth setup --auto [--project <id>] [flags]",
-		ShortHelp:  "Create a Google Cloud service account and link it to this CLI.",
-		LongHelp: `Automated setup for Google Play authentication.
+		ShortUsage: shortUsage,
+		ShortHelp:  "Set up Google Play authentication end-to-end.",
+		LongHelp: `One-command setup for Google Play authentication.
 
-With --auto, runs these steps via gcloud:
-  1. Detect/confirm GCP project
-  2. Enable the androidpublisher API
-  3. Create a service account (--sa-name)
-  4. Download a JSON key (--key-out)
+With --auto, gplay drives the whole flow via gcloud:
+  1. Install the gcloud CLI if it is missing (Homebrew on macOS, curl on Linux)
+  2. Log you into Google Cloud (gcloud auth login) if needed
+  3. Enable the androidpublisher API
+  4. Create a service account (--sa-name) and download a JSON key
   5. Store the profile in ~/.gplay/config.json
-
-You still need to link the service account email in Play Console afterwards;
-the URL is printed at the end.
+  6. Open Play Console for the one manual step: granting the account access
 
 Example:
-  gplay auth setup --auto --project my-gcp-project
-  gplay auth setup --auto --dry-run        # preview commands
-  gplay auth setup                          # open a how-to instead (no gcloud)`,
+  gplay setup --auto                        # full automated setup
+  gplay setup --auto --project my-gcp-project
+  gplay setup --auto --dry-run              # preview commands
+  gplay setup --auto --no-browser           # CI/agent friendly (no browser)
+  gplay setup                                # print manual instructions`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,6 +174,8 @@ Example:
 				KeyOut:     strings.TrimSpace(*keyOut),
 				DryRun:     *dryRun,
 				SetDefault: *setDefault,
+				NoBrowser:  *noBrowser,
+				NoInstall:  *noInstall,
 				Output:     *output,
 				Pretty:     *pretty,
 				Runner:     realRunner{},
@@ -103,7 +187,7 @@ Example:
 	}
 }
 
-// SetupOptions holds all flags for AuthSetupCommand, exposed for tests.
+// SetupOptions holds all flags for the setup command, exposed for tests.
 type SetupOptions struct {
 	Auto       bool
 	Project    string
@@ -112,6 +196,8 @@ type SetupOptions struct {
 	KeyOut     string
 	DryRun     bool
 	SetDefault bool
+	NoBrowser  bool
+	NoInstall  bool
 	Output     string
 	Pretty     bool
 
@@ -120,7 +206,7 @@ type SetupOptions struct {
 	HomeDir    func() (string, error)
 }
 
-// SetupResult is what `auth setup --auto` produces.
+// SetupResult is what `setup --auto` produces.
 type SetupResult struct {
 	Project       string   `json:"project,omitempty"`
 	ServiceAcct   string   `json:"service_account_email"`
@@ -128,6 +214,7 @@ type SetupResult struct {
 	ConfigPath    string   `json:"config_path,omitempty"`
 	ProfileName   string   `json:"profile"`
 	PlayLinkURL   string   `json:"play_console_link_url"`
+	BrowserOpened bool     `json:"browser_opened,omitempty"`
 	StepsExecuted []string `json:"steps_executed"`
 	DryRun        bool     `json:"dry_run,omitempty"`
 }
@@ -155,12 +242,19 @@ func RunSetup(ctx context.Context, opts SetupOptions, stdout *os.File) error {
 		))
 	}
 
-	if _, err := opts.Runner.LookPath("gcloud"); err != nil {
-		return shared.NewReportedError(fmt.Errorf(
-			"gcloud CLI is required for --auto; install from https://cloud.google.com/sdk",
-		))
+	var preSteps []string
+
+	// 1. Ensure gcloud is installed.
+	if err := ensureGcloud(ctx, opts, &preSteps); err != nil {
+		return err
 	}
 
+	// 2. Ensure we are logged into gcloud.
+	if err := ensureGcloudAuth(ctx, opts, &preSteps); err != nil {
+		return err
+	}
+
+	// 3. Resolve the project.
 	project := opts.Project
 	if project == "" {
 		out, err := opts.Runner.Run(ctx, nil, "gcloud", "config", "get-value", "project", "--quiet")
@@ -189,12 +283,13 @@ func RunSetup(ctx context.Context, opts SetupOptions, stdout *os.File) error {
 	)
 
 	result := SetupResult{
-		Project:     project,
-		ServiceAcct: saEmail,
-		KeyPath:     keyPath,
-		ProfileName: opts.Profile,
-		PlayLinkURL: linkURL,
-		DryRun:      opts.DryRun,
+		Project:       project,
+		ServiceAcct:   saEmail,
+		KeyPath:       keyPath,
+		ProfileName:   opts.Profile,
+		PlayLinkURL:   linkURL,
+		DryRun:        opts.DryRun,
+		StepsExecuted: preSteps,
 	}
 
 	steps := [][]string{
@@ -263,6 +358,14 @@ func RunSetup(ctx context.Context, opts SetupOptions, stdout *os.File) error {
 			}
 			result.ConfigPath = cfgPath
 		}
+
+		// Final step: open Play Console for the manual grant (best-effort).
+		if !opts.NoBrowser {
+			_ = opts.Runner.Copy(saEmail)
+			if err := opts.Runner.OpenBrowser(linkURL); err == nil {
+				result.BrowserOpened = true
+			}
+		}
 	}
 
 	if strings.ToLower(opts.Output) == "json" {
@@ -270,6 +373,75 @@ func RunSetup(ctx context.Context, opts SetupOptions, stdout *os.File) error {
 	}
 	printSetupText(stdout, result)
 	return nil
+}
+
+// ensureGcloud makes sure the gcloud CLI is available, installing it when
+// missing (unless --no-install or --dry-run).
+func ensureGcloud(ctx context.Context, opts SetupOptions, steps *[]string) error {
+	if _, err := opts.Runner.LookPath("gcloud"); err == nil {
+		return nil
+	}
+
+	if opts.DryRun {
+		*steps = append(*steps, "install gcloud CLI (skipped: dry-run)")
+		return nil
+	}
+	if opts.NoInstall {
+		return shared.NewReportedError(fmt.Errorf(
+			"gcloud CLI not found; install it from https://cloud.google.com/sdk or omit --no-install to auto-install",
+		))
+	}
+
+	if err := opts.Runner.InstallGcloud(ctx); err != nil {
+		return shared.NewReportedError(fmt.Errorf(
+			"install gcloud: %w; install manually from https://cloud.google.com/sdk", err,
+		))
+	}
+	if _, err := opts.Runner.LookPath("gcloud"); err != nil {
+		return shared.NewReportedError(fmt.Errorf(
+			"gcloud was installed but is not on PATH yet; restart your shell and re-run `gplay setup --auto`",
+		))
+	}
+	*steps = append(*steps, "installed gcloud CLI")
+	return nil
+}
+
+// ensureGcloudAuth makes sure there is an active gcloud account, launching
+// `gcloud auth login` when there is not (unless --no-browser or --dry-run).
+func ensureGcloudAuth(ctx context.Context, opts SetupOptions, steps *[]string) error {
+	if opts.DryRun {
+		*steps = append(*steps, "gcloud auth login (if not already authenticated)")
+		return nil
+	}
+
+	if activeGcloudAccount(ctx, opts.Runner) != "" {
+		*steps = append(*steps, "gcloud account: "+activeGcloudAccount(ctx, opts.Runner))
+		return nil
+	}
+
+	if opts.NoBrowser {
+		return shared.NewReportedError(fmt.Errorf(
+			"not logged into gcloud; run `gcloud auth login` first (or omit --no-browser to launch it)",
+		))
+	}
+
+	if err := opts.Runner.RunInteractive(ctx, "gcloud", "auth", "login"); err != nil {
+		return shared.NewReportedError(fmt.Errorf("gcloud auth login: %w", err))
+	}
+	account := activeGcloudAccount(ctx, opts.Runner)
+	if account == "" {
+		return shared.NewReportedError(fmt.Errorf("gcloud login did not complete; re-run `gplay setup --auto`"))
+	}
+	*steps = append(*steps, "logged into gcloud: "+account)
+	return nil
+}
+
+func activeGcloudAccount(ctx context.Context, runner gcloudRunner) string {
+	out, err := runner.Run(ctx, nil, "gcloud", "auth", "list", "--filter=status:ACTIVE", "--format=value(account)")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func maybeRun(ctx context.Context, opts SetupOptions, args []string, result *SetupResult) error {
@@ -293,8 +465,8 @@ func printSetupText(w *os.File, r SetupResult) {
 	if w == nil {
 		w = os.Stdout
 	}
-	fmt.Fprintln(w, "gplay auth setup")
-	fmt.Fprintln(w, "================")
+	fmt.Fprintln(w, "gplay setup")
+	fmt.Fprintln(w, "===========")
 	fmt.Fprintf(w, "  Project:          %s\n", r.Project)
 	fmt.Fprintf(w, "  Service account:  %s\n", r.ServiceAcct)
 	fmt.Fprintf(w, "  Key path:         %s\n", r.KeyPath)
@@ -306,8 +478,12 @@ func printSetupText(w *os.File, r SetupResult) {
 	for _, s := range r.StepsExecuted {
 		fmt.Fprintf(w, "  - %s\n", s)
 	}
-	fmt.Fprintln(w, "\nNext step (manual):")
-	fmt.Fprintf(w, "  Open %s and grant the service account access in Play Console.\n", r.PlayLinkURL)
+	fmt.Fprintln(w, "\nLast step — grant access in Play Console:")
+	if r.BrowserOpened {
+		fmt.Fprintln(w, "  Opened Play Console in your browser (service account email copied to clipboard).")
+	}
+	fmt.Fprintf(w, "  %s\n", r.PlayLinkURL)
+	fmt.Fprintf(w, "  Grant %s access, then verify with `gplay auth doctor`.\n", r.ServiceAcct)
 }
 
 // validateServiceAccountKey sanity-checks that the downloaded file is a
@@ -333,7 +509,7 @@ func validateServiceAccountKey(path string) error {
 	return nil
 }
 
-// saveProfileToConfig is the real SaveConfig hook for AuthSetupCommand.
+// saveProfileToConfig is the real SaveConfig hook for the setup command.
 func saveProfileToConfig(profile config.Profile, setDefault bool) (string, error) {
 	cfg, err := config.Load()
 	if err != nil && !errors.Is(err, config.ErrNotFound) {

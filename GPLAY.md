@@ -12,6 +12,7 @@
 - [auth logout](#auth-logout)
 - [auth status](#auth-status)
 - [auth doctor](#auth-doctor)
+- [setup](#setup)
 - [apps](#apps)
 - [apps list](#apps-list)
 - [audit](#audit)
@@ -325,34 +326,36 @@ gplay auth init [flags]
 
 ## gplay auth setup
 
-Create a Google Cloud service account and link it to this CLI.
+Set up Google Play authentication end-to-end.
 
 ```
 gplay auth setup --auto [--project <id>] [flags]
 ```
 
-Automated setup for Google Play authentication.
+One-command setup for Google Play authentication.
 
-With --auto, runs these steps via gcloud:
-  1. Detect/confirm GCP project
-  2. Enable the androidpublisher API
-  3. Create a service account (--sa-name)
-  4. Download a JSON key (--key-out)
+With --auto, gplay drives the whole flow via gcloud:
+  1. Install the gcloud CLI if it is missing (Homebrew on macOS, curl on Linux)
+  2. Log you into Google Cloud (gcloud auth login) if needed
+  3. Enable the androidpublisher API
+  4. Create a service account (--sa-name) and download a JSON key
   5. Store the profile in ~/.gplay/config.json
-
-You still need to link the service account email in Play Console afterwards;
-the URL is printed at the end.
+  6. Open Play Console for the one manual step: granting the account access
 
 Example:
-  gplay auth setup --auto --project my-gcp-project
-  gplay auth setup --auto --dry-run        # preview commands
-  gplay auth setup                          # open a how-to instead (no gcloud)
+  gplay setup --auto                        # full automated setup
+  gplay setup --auto --project my-gcp-project
+  gplay setup --auto --dry-run              # preview commands
+  gplay setup --auto --no-browser           # CI/agent friendly (no browser)
+  gplay setup                                # print manual instructions
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--auto` | Automate GCP service-account creation using gcloud | `false` |
 | `--dry-run` | Print the gcloud commands without executing them | `false` |
 | `--key-out` | Path to write the service-account JSON (defaults to ~/.gplay/<sa>.json) | `` |
+| `--no-browser` | Do not open a browser (for login or the Play Console grant step) | `false` |
+| `--no-install` | Do not auto-install gcloud when it is missing | `false` |
 | `--output` | Output format: text (default), json | `text` |
 | `--pretty` | Pretty-print JSON output | `false` |
 | `--profile` | gplay auth profile to create | `default` |
@@ -447,6 +450,47 @@ gplay auth doctor [flags]
 | `--fix` | Attempt to auto-fix detected issues | `false` |
 | `--output` | Output format: text (default), json | `text` |
 | `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay setup
+
+Set up Google Play authentication end-to-end.
+
+```
+gplay setup --auto [flags]
+```
+
+One-command setup for Google Play authentication.
+
+With --auto, gplay drives the whole flow via gcloud:
+  1. Install the gcloud CLI if it is missing (Homebrew on macOS, curl on Linux)
+  2. Log you into Google Cloud (gcloud auth login) if needed
+  3. Enable the androidpublisher API
+  4. Create a service account (--sa-name) and download a JSON key
+  5. Store the profile in ~/.gplay/config.json
+  6. Open Play Console for the one manual step: granting the account access
+
+Example:
+  gplay setup --auto                        # full automated setup
+  gplay setup --auto --project my-gcp-project
+  gplay setup --auto --dry-run              # preview commands
+  gplay setup --auto --no-browser           # CI/agent friendly (no browser)
+  gplay setup                                # print manual instructions
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--auto` | Automate GCP service-account creation using gcloud | `false` |
+| `--dry-run` | Print the gcloud commands without executing them | `false` |
+| `--key-out` | Path to write the service-account JSON (defaults to ~/.gplay/<sa>.json) | `` |
+| `--no-browser` | Do not open a browser (for login or the Play Console grant step) | `false` |
+| `--no-install` | Do not auto-install gcloud when it is missing | `false` |
+| `--output` | Output format: text (default), json | `text` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--profile` | gplay auth profile to create | `default` |
+| `--project` | GCP project ID (defaults to gcloud default) | `` |
+| `--sa-name` | Service account name | `play-console-cli` |
+| `--set-default` | Set as default profile in config | `true` |
 
 ---
 

@@ -93,6 +93,7 @@ func Subcommands(version string) []*ffcli.Command {
 func SubcommandsWithRuntime(version string, rt *cliruntime.Runtime) []*ffcli.Command {
 	return []*ffcli.Command{
 		auth.AuthCommand(),
+		auth.SetupCommand(),
 		apps.AppsCommand(rt),
 		auditcmd.AuditCommand(),
 		quota.QuotaCommand(),
