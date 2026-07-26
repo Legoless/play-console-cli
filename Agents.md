@@ -41,6 +41,7 @@ gplay migrate fastlane          # Migrate from Fastlane metadata
 gplay reports financial         # Financial reports (list/download from GCS)
 gplay reports stats             # Statistics reports (list/download from GCS)
 gplay custom-apps create        # Publish private apps via Managed Google Play
+gplay preflight                 # Offline 9-scanner compliance scan of an AAB/APK
 gplay listings locales          # List available locales with validation
 gplay release-notes generate    # Generate release notes from git history
 ```
@@ -184,6 +185,7 @@ Available skills:
 - `gplay-user-management` - Developer account user and grant management
 - `gplay-metadata-sync` - Metadata and localization sync (incl. Fastlane format)
 - `gplay-migrate-fastlane` - Fastlane metadata migration
+- `gplay-preflight` - Offline AAB/APK scanning: nine scanners, manifest decoding, CI gating
 - `gplay-submission-checks` - Pre-submission validation
 - `gplay-screenshot-automation` - Upload and validate Play Store screenshots
 - `gplay-testers-orchestration` - Closed-testing tracks and tester management

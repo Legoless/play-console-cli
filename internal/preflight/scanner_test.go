@@ -126,8 +126,27 @@ func TestScanDetectsBundleSize(t *testing.T) {
 func TestScanSecretDetection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "app.aab")
 	entries := minimalAAB()
-	// Planting a Google API key in a resource-ish file.
+	// Planting a Google API key in a resource-ish file. Android apps embed
+	// Maps and Firebase keys legitimately, so this is a warning rather than a
+	// build-failing error; the fix is key restriction, not removal.
 	entries["base/res/values/secrets.xml"] = []byte(`<string name="k">AIza` + strings.Repeat("x", 35) + `</string>`)
+	buildAAB(t, path, entries)
+	r, _ := Scan(path, Options{})
+	has := false
+	for _, f := range r.Findings {
+		if f.Check == "secrets" && f.Severity == SeverityWarning {
+			has = true
+		}
+	}
+	if !has {
+		t.Errorf("expected google_api_key warning, got %+v", r.Findings)
+	}
+}
+
+func TestScanHardCredentialIsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.aab")
+	entries := minimalAAB()
+	entries["base/assets/config.json"] = []byte(`{"type": "service_account", "project_id": "x"}`)
 	buildAAB(t, path, entries)
 	r, _ := Scan(path, Options{})
 	has := false
@@ -137,7 +156,53 @@ func TestScanSecretDetection(t *testing.T) {
 		}
 	}
 	if !has {
-		t.Error("expected secret detection")
+		t.Errorf("expected service account key to be an error, got %+v", r.Findings)
+	}
+}
+
+func TestScanShippedKeystoreIsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.aab")
+	entries := minimalAAB()
+	entries["base/assets/release.keystore"] = []byte("binary")
+	buildAAB(t, path, entries)
+	r, _ := Scan(path, Options{})
+	has := false
+	for _, f := range r.Findings {
+		if f.Check == "credential_file" && f.Severity == SeverityError {
+			has = true
+		}
+	}
+	if !has {
+		t.Errorf("expected shipped keystore to be an error, got %+v", r.Findings)
+	}
+}
+
+// The URL-shaped patterns match on host and path without a scheme, so a
+// credential is still caught when the URL was assembled by concatenation or
+// stored without "https://". Both spellings must hit.
+func TestScanURLSecretsMatchWithAndWithoutScheme(t *testing.T) {
+	token := "T00000000/B00000000/" + strings.Repeat("x", 24)
+	for _, tc := range []struct {
+		name, payload string
+	}{
+		{"with scheme", "https://hooks.slack.com/services/" + token},
+		{"without scheme", "hooks.slack.com/services/" + token},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "app.aab")
+			entries := minimalAAB()
+			entries["base/assets/webhook.txt"] = []byte(tc.payload)
+			buildAAB(t, path, entries)
+
+			r, _ := Scan(path, Options{})
+			for _, f := range r.Findings {
+				if f.Check == "secrets" && f.Severity == SeverityError &&
+					strings.Contains(f.Message, "slack_webhook") {
+					return
+				}
+			}
+			t.Errorf("expected slack_webhook error, got %+v", r.Findings)
+		})
 	}
 }
 
