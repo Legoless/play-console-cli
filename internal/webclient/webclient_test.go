@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -109,8 +110,13 @@ func TestDiscoverDeveloperID_NotFound(t *testing.T) {
 const realAppSummariesPayload = `{"1":[{"1":{"1":{"1":"6901885972034847549"},"2":{"1":"4974539508825146246"}},"2":"Aérocoach","4":{"1":[1],"2":1},"5":"com.unifiedsense.aerocoach","8":1,"16":"en-US"}]}`
 
 func TestListApps(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "")
 	var gotPath, gotAuthUser, gotKey string
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
+		"GET /console": func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `<script>window.serializedInitialChunks['startupData'] = `+
+				`"\x7b\x221\x22:\x7b\x228\x22:\x22runtime-test-key\x22\x7d\x7d";</script>`)
+		},
 		"GET /v1/developers/6901885972034847549/appSummaries": func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
 			gotAuthUser = r.Header.Get("X-Goog-AuthUser")
@@ -132,8 +138,8 @@ func TestListApps(t *testing.T) {
 	if apps[0].AppID != "4974539508825146246" {
 		t.Errorf("appID = %q", apps[0].AppID)
 	}
-	if gotKey == "" {
-		t.Error("X-Goog-Api-Key header not sent")
+	if gotKey != "runtime-test-key" {
+		t.Errorf("X-Goog-Api-Key = %q, want key discovered from console HTML", gotKey)
 	}
 	// Sending X-Goog-AuthUser makes the real backend reject the credentials.
 	if gotAuthUser != "" {
@@ -142,7 +148,75 @@ func TestListApps(t *testing.T) {
 	_ = gotPath
 }
 
+func TestListApps_MissingAPIKeyIsActionable(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "")
+	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
+		"GET /console": func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `<script>window.serializedInitialChunks['startupData'] = `+
+				`"\x7b\x221\x22:\x7b\x7d\x7d";</script>`)
+		},
+		"GET /v1/developers/dev1/appSummaries": func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `{"1":[]}`)
+		},
+	})
+	c := NewWithClient(testSession(), nil, mock.BaseURL())
+
+	_, err := c.ListApps(context.Background(), "dev1")
+	if err == nil {
+		t.Error("ListApps succeeded, want missing API key error")
+	} else {
+		for _, want := range []string{"Play Console API key", appsAPIKeyEnv} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not contain %q", err, want)
+			}
+		}
+	}
+	for _, req := range mock.RequestLog() {
+		if req.Path == "/v1/developers/dev1/appSummaries" {
+			t.Error("apps backend called without a discovered API key")
+		}
+	}
+}
+
+func TestAPIKey_ConcurrentDiscovery(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "")
+	var consoleCalls atomic.Int32
+	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
+		"GET /console": func(w http.ResponseWriter, r *http.Request) {
+			consoleCalls.Add(1)
+			time.Sleep(10 * time.Millisecond)
+			fmt.Fprint(w, `<script>window.serializedInitialChunks['startupData'] = `+
+				`"\x7b\x221\x22:\x7b\x228\x22:\x22runtime-test-key\x22\x7d\x7d";</script>`)
+		},
+	})
+	c := NewWithClient(testSession(), nil, mock.BaseURL())
+
+	const workers = 16
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	for range workers {
+		go func() {
+			<-start
+			key, err := c.apiKey(context.Background())
+			if err == nil && key != "runtime-test-key" {
+				err = fmt.Errorf("apiKey = %q, want runtime-test-key", key)
+			}
+			errs <- err
+		}()
+	}
+	close(start)
+	for range workers {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
+	}
+	if got := consoleCalls.Load(); got != 1 {
+		t.Errorf("console requests = %d, want one cached discovery", got)
+	}
+}
+
 func TestListApps_FollowsPagination(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
 	var tokens []string
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"GET /v1/developers/dev1/appSummaries": func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +243,7 @@ func TestListApps_FollowsPagination(t *testing.T) {
 }
 
 func TestListApps_AuthError(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"GET /v1/developers/dev1/appSummaries": func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusForbidden)
@@ -215,6 +290,7 @@ func TestDiscoverDeveloperID_IgnoresUnrelated19DigitNumbers(t *testing.T) {
 }
 
 func TestCheckPackageName(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
 	var gotQuery, gotMethod string
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"GET /v1/developers/dev1:checkPackageNameAvailability": func(w http.ResponseWriter, r *http.Request) {
@@ -239,6 +315,7 @@ func TestCheckPackageName(t *testing.T) {
 }
 
 func TestCheckPackageName_Taken(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"GET /v1/developers/dev1:checkPackageNameAvailability": func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `{"1":4}`) // AVAILABILITY_UNAVAILABLE
@@ -255,6 +332,7 @@ func TestCheckPackageName_Taken(t *testing.T) {
 }
 
 func TestCreateApp(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
 	var gotBody, gotMethod string
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"POST /v1/developers/dev1:createAppV2": func(w http.ResponseWriter, r *http.Request) {
@@ -298,6 +376,7 @@ func TestCreateApp_RequiresDeclarations(t *testing.T) {
 }
 
 func TestCreateApp_GameKind(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
 	var gotBody string
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"POST /v1/developers/dev1:createAppV2": func(w http.ResponseWriter, r *http.Request) {
