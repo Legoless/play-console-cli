@@ -41,6 +41,9 @@ gplay migrate fastlane          # Migrate from Fastlane metadata
 gplay reports financial         # Financial reports (list/download from GCS)
 gplay reports stats             # Statistics reports (list/download from GCS)
 gplay custom-apps create        # Publish private apps via Managed Google Play
+gplay web auth login            # Store browser cookies as a Play Console web session
+gplay web apps list             # List every app in a developer account (sees brand-new apps)
+gplay web apps create           # Create an app by driving the console UI in a managed Chrome
 gplay listings locales          # List available locales with validation
 gplay release-notes generate    # Generate release notes from git history
 ```
