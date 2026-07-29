@@ -20,8 +20,10 @@ import (
 const (
 	authDeveloperID = "1234567890123456789"
 	authConsolePath = "/console/u/2/developers/" + authDeveloperID + "/app-list"
-	authConsoleHTML = `<html><script src="https://www.gstatic.com/acx/play/console/brt/play_console_ui_20260727/main/main.dart.js"></script></html>`
-	authWizHTML     = `<html><script>window.WIZ_global_data = {"SNlM0e":"xsrf","FdrFJe":"-1","cfb2h":"bl"};</script><a href="/console/1234567890123456789/app-list">apps</a></html>`
+	authConsoleHTML = `<html><script>window.serializedInitialChunks['startupData'] = ` +
+		`"\x7b\x221\x22:\x7b\x228\x22:\x22runtime-test-key\x22\x7d\x7d";</script>` +
+		`<script src="https://www.gstatic.com/acx/play/console/brt/play_console_ui_20260727/main/main.dart.js"></script></html>`
+	authWizHTML = `<html><script>window.WIZ_global_data = {"SNlM0e":"xsrf","FdrFJe":"-1","cfb2h":"bl"};</script><a href="/console/1234567890123456789/app-list">apps</a></html>`
 )
 
 // useTempSessionDir points web session storage at a temp dir.

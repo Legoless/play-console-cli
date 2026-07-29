@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tamtom/play-console-cli/internal/websession"
@@ -42,11 +43,13 @@ var errAccountsRedirect = errors.New("redirected to accounts.google.com")
 
 // Client is a Play Console web-session RPC client.
 type Client struct {
-	sess        *websession.Session
-	http        *http.Client
-	baseURL     string
-	appsBaseURL string
-	now         func() time.Time // overridable in tests
+	sess         *websession.Session
+	http         *http.Client
+	baseURL      string
+	appsBaseURL  string
+	appsAPIKeyMu sync.Mutex
+	appsAPIKey   string
+	now          func() time.Time // overridable in tests
 }
 
 // New returns a Client for the given session talking to the real Play
@@ -207,6 +210,14 @@ func (c *Client) getWithURL(ctx context.Context, path string) ([]byte, *url.URL,
 	return body, resp.Request.URL, nil
 }
 
+func (c *Client) getConsole(ctx context.Context) ([]byte, *url.URL, error) {
+	path := "/console"
+	if c.sess != nil && strings.TrimSpace(c.sess.UserEmail) != "" {
+		path += "?authuser=" + url.QueryEscape(strings.TrimSpace(c.sess.UserEmail))
+	}
+	return c.getWithURL(ctx, path)
+}
+
 // developerIDRe accepts both the current account-scoped URL and the legacy
 // /console/<developer-id>/ shape.
 var developerIDRe = regexp.MustCompile(`/console/(?:u/\d+/developers/)?(\d+)(?:/|$)`)
@@ -218,14 +229,25 @@ var startupDataRe = regexp.MustCompile(`serializedInitialChunks\['startupData'\]
 // jsHexEscapeRe matches the \xNN escapes the blob uses for punctuation.
 var jsHexEscapeRe = regexp.MustCompile(`\\x([0-9a-fA-F]{2})`)
 
-// parseStartupDeveloperID reads the developer account currently in scope from
-// the console's startup data (field 2.1.1). Scanning the page for 19-digit
-// numbers instead would match unrelated IDs and silently scope a write to the
-// wrong developer account.
-func parseStartupDeveloperID(body []byte) (string, error) {
+// startupData is the console's serialized bootstrap blob. Field numbers come
+// from the page itself: 1.8 is the public web API key, 2.1.1 the developer
+// account currently in scope.
+type startupData struct {
+	Boot struct {
+		APIKey string `json:"8"`
+	} `json:"1"`
+	Scope struct {
+		Developer struct {
+			Value string `json:"1"`
+		} `json:"1"`
+	} `json:"2"`
+}
+
+// parseStartupData decodes the console's bootstrap blob.
+func parseStartupData(body []byte) (*startupData, error) {
 	m := startupDataRe.FindSubmatch(body)
 	if m == nil {
-		return "", errors.New("startupData not found in console HTML")
+		return nil, errors.New("startupData not found in console HTML")
 	}
 	// \xNN is not valid JSON; \uXXXX is. Rewriting lets the JSON decoder
 	// unescape the literal, then the result is itself JSON.
@@ -233,17 +255,22 @@ func parseStartupDeveloperID(body []byte) (string, error) {
 
 	var inner string
 	if err := json.Unmarshal(literal, &inner); err != nil {
-		return "", fmt.Errorf("decoding startupData string: %w", err)
+		return nil, fmt.Errorf("decoding startupData string: %w", err)
 	}
-	var data struct {
-		Scope struct {
-			Developer struct {
-				Value string `json:"1"`
-			} `json:"1"`
-		} `json:"2"`
-	}
+	var data startupData
 	if err := json.Unmarshal([]byte(inner), &data); err != nil {
-		return "", fmt.Errorf("parsing startupData: %w", err)
+		return nil, fmt.Errorf("parsing startupData: %w", err)
+	}
+	return &data, nil
+}
+
+// parseStartupDeveloperID reads the developer account currently in scope.
+// Scanning the page for 19-digit numbers instead would match unrelated IDs and
+// silently scope a write to the wrong developer account.
+func parseStartupDeveloperID(body []byte) (string, error) {
+	data, err := parseStartupData(body)
+	if err != nil {
+		return "", err
 	}
 	if data.Scope.Developer.Value == "" {
 		return "", errors.New("no developer account in startupData")
@@ -254,21 +281,23 @@ func parseStartupDeveloperID(body []byte) (string, error) {
 // DiscoverDeveloperID best-effort extracts the developer account ID from the
 // console root page.
 func (c *Client) DiscoverDeveloperID(ctx context.Context) (string, error) {
-	path := "/console"
-	if c.sess != nil && strings.TrimSpace(c.sess.UserEmail) != "" {
-		path += "?authuser=" + url.QueryEscape(strings.TrimSpace(c.sess.UserEmail))
-	}
-	body, finalURL, err := c.getWithURL(ctx, path)
+	body, finalURL, err := c.getConsole(ctx)
 	if err != nil {
 		return "", err
+	}
+	data, _ := parseStartupData(body)
+	if data != nil {
+		c.appsAPIKeyMu.Lock()
+		c.appsAPIKey = strings.TrimSpace(data.Boot.APIKey)
+		c.appsAPIKeyMu.Unlock()
 	}
 	for _, candidate := range [][]byte{[]byte(finalURL.Path), body} {
 		if m := developerIDRe.FindSubmatch(candidate); m != nil {
 			return string(m[1]), nil
 		}
 	}
-	if id, err := parseStartupDeveloperID(body); err == nil {
-		return id, nil
+	if data != nil && data.Scope.Developer.Value != "" {
+		return data.Scope.Developer.Value, nil
 	}
 	return "", fmt.Errorf("%w: no developer account found in Play Console (run gplay web auth login again)", ErrAuth)
 }

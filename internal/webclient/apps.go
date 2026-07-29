@@ -19,11 +19,8 @@ import (
 // Play Console UI uses these endpoints; it does not use batchexecute at all.
 const DefaultAppsBaseURL = "https://playconsoleapps-pa.clients6.google.com"
 
-// appsAPIKey is the public web API key the console sends as X-Goog-Api-Key.
-// It ships in the console page's startup data; override it with
-// GPLAY_WEB_API_KEY if Google rotates it.
-const appsAPIKey = "AIzaSyBAha_rcoO_aGsmiR5fWbNfdOjqT0gXwbk"
-
+// appsAPIKeyEnv overrides the public API key discovered from console startup
+// data.
 const appsAPIKeyEnv = "GPLAY_WEB_API_KEY"
 
 // maxAppPages bounds pagination so a misbehaving nextPageToken cannot spin
@@ -60,12 +57,30 @@ type appSummaryWire struct {
 	Language    string `json:"16"`
 }
 
-// apiKey returns the configured apps API key (env wins).
-func apiKey() string {
+// apiKey returns the environment override or discovers the public key from the
+// console's startup data.
+func (c *Client) apiKey(ctx context.Context) (string, error) {
 	if v := strings.TrimSpace(os.Getenv(appsAPIKeyEnv)); v != "" {
-		return v
+		return v, nil
 	}
-	return appsAPIKey
+	c.appsAPIKeyMu.Lock()
+	defer c.appsAPIKeyMu.Unlock()
+	if c.appsAPIKey != "" {
+		return c.appsAPIKey, nil
+	}
+	body, _, err := c.getConsole(ctx)
+	if err != nil {
+		return "", fmt.Errorf("discovering Play Console API key: %w", err)
+	}
+	data, err := parseStartupData(body)
+	if err != nil {
+		return "", fmt.Errorf("discovering Play Console API key: %w (set %s to override)", err, appsAPIKeyEnv)
+	}
+	c.appsAPIKey = strings.TrimSpace(data.Boot.APIKey)
+	if c.appsAPIKey == "" {
+		return "", fmt.Errorf("Play Console API key not found in startupData; set %s to override", appsAPIKeyEnv)
+	}
+	return c.appsAPIKey, nil
 }
 
 // ListApps returns every app in the developer account, following pagination.
@@ -153,13 +168,17 @@ func (c *Client) apiRequest(ctx context.Context, method, endpoint string, body i
 	if err != nil {
 		return nil, err
 	}
+	key, err := c.apiKey(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if header := c.cookieHeader(); header != "" {
 		req.Header.Set("Cookie", header)
 	}
 	if h := c.authHeader(); h != "" {
 		req.Header.Set("Authorization", h)
 	}
-	req.Header.Set("X-Goog-Api-Key", apiKey())
+	req.Header.Set("X-Goog-Api-Key", key)
 	req.Header.Set("Content-Type", "application/json+protobuf")
 	req.Header.Set("Origin", authOrigin)
 	req.Header.Set("Referer", authOrigin+"/")
