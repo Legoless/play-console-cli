@@ -38,7 +38,7 @@ func WebCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "web",
 		ShortUsage: "gplay web <subcommand> [flags]",
-		ShortHelp:  "Play Console in the browser, plus web-session commands (list apps).",
+		ShortHelp:  "Open Play Console and manage apps through a web session.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

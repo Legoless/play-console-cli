@@ -326,6 +326,7 @@
 - [web apps](#web-apps)
 - [web apps list](#web-apps-list)
 - [web apps create](#web-apps-create)
+- [web apps update](#web-apps-update)
 - [update](#update)
 - [completion](#completion)
 - [completion bash](#completion-bash)
@@ -7559,7 +7560,7 @@ Examples:
 
 ## gplay web
 
-Play Console in the browser, plus web-session commands (list apps).
+Open Play Console and manage apps through a web session.
 
 ```
 gplay web <subcommand> [flags]
@@ -7703,7 +7704,7 @@ gplay web auth logout [--account <email> | --all] --confirm
 
 ## gplay web apps
 
-Manage apps via the Play Console web session.
+Manage apps through a Play Console web session.
 
 ```
 gplay web apps <subcommand> [flags]
@@ -7711,9 +7712,9 @@ gplay web apps <subcommand> [flags]
 
 Manage apps through Play Console's internal web APIs.
 
-These commands use the browser-session auth from "gplay web auth login", not
-the service-account API, because the official Android Publisher API has no
-endpoint for enumerating the apps in a developer account.
+These commands use the browser-session auth from "gplay web auth login" for
+Play Console capabilities that the official Android Publisher API does not
+provide, including listing and creating apps and changing App category.
 
 ---
 
@@ -7793,6 +7794,42 @@ Examples:
 | `--package` | Package name (applicationId), e.g. com.example.app | `` |
 | `--pretty` | Pretty-print JSON output | `false` |
 | `--pricing` | free or paid | `` |
+
+---
+
+## gplay web apps update
+
+Update an existing package's App category.
+
+```
+gplay web apps update --package <id> --kind <app|game> --category <label> --confirm
+```
+
+Update an existing Play Console package's application type and required category.
+
+This uses Store settings in the gplay-managed browser because the official
+Android Publisher API cannot change App category. Sign in once with:
+  gplay web auth login --email <email> --browser
+
+Only App category belongs here. Use "gplay listings patch" for localized app
+names and "gplay details patch" for default language or contact details. App
+pricing is intentionally excluded because changing a paid app to free can make
+a later change back to paid impossible.
+
+Examples:
+  gplay web apps update --package com.example.app --kind app --category Education --confirm
+  gplay --dry-run web apps update --package com.example.app --kind game --category Educational --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--category` | Google Play category label, e.g. Education | `` |
+| `--confirm` | Confirm the App category change | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--kind` | New application type: app or game | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
 
 ---
 

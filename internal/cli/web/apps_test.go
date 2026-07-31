@@ -75,13 +75,15 @@ func TestWebAppsList_NoSession(t *testing.T) {
 	}
 }
 
-func TestWebAppsList_RegisteredInGroup(t *testing.T) {
+func TestWebAppsCommands_RegisteredInGroup(t *testing.T) {
 	var names []string
 	for _, sub := range WebAppsCommand().Subcommands {
 		names = append(names, sub.Name)
 	}
-	if !slices.Contains(names, "list") {
-		t.Errorf("web apps subcommands = %v, want a list subcommand", names)
+	for _, want := range []string{"list", "create", "update"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("web apps subcommands = %v, want %q", names, want)
+		}
 	}
 }
 
@@ -394,5 +396,247 @@ func TestWebAppsCreate_RefusesWhenSubmitDisabled(t *testing.T) {
 	err := cmd.Exec(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "not ready") {
 		t.Errorf("err = %v, want not-ready error", err)
+	}
+}
+
+func updateArgs(extra ...string) []string {
+	return append([]string{
+		"--package", "com.unifiedsense.aerocoach",
+		"--kind", "game",
+		"--category", "Educational",
+		"--confirm",
+	}, extra...)
+}
+
+func TestWebAppsUpdate_ValidatesFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "package", args: []string{"--kind", "game", "--category", "Educational", "--confirm"}, want: "--package"},
+		{name: "kind", args: []string{"--package", "com.example", "--kind", "tool", "--category", "Educational", "--confirm"}, want: "--kind must be app or game"},
+		{name: "category", args: []string{"--package", "com.example", "--kind", "app", "--confirm"}, want: "--category"},
+		{name: "confirm", args: []string{"--package", "com.example", "--kind", "app", "--category", "Education"}, want: "--confirm"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := WebAppsUpdateCommand()
+			if err := cmd.FlagSet.Parse(tt.args); err != nil {
+				t.Fatal(err)
+			}
+			err := cmd.Exec(context.Background(), nil)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestWebAppsUpdate_DryRunSkipsBrowser(t *testing.T) {
+	f := &fakeUpdater{failAt: "open"}
+	stubUpdater(t, f)
+
+	cmd := WebAppsUpdateCommand()
+	if err := cmd.FlagSet.Parse(updateArgs()); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Exec(shared.ContextWithDryRun(context.Background(), true), nil); err != nil {
+		t.Fatalf("dry-run: %v", err)
+	}
+	if len(f.steps) != 0 {
+		t.Errorf("browser steps = %v, want none", f.steps)
+	}
+}
+
+type fakeUpdater struct {
+	steps       []string
+	states      []webdriver.AppSettingsState
+	developerID string
+	appID       string
+	account     string
+	setKind     string
+	setCategory string
+	failAt      string
+}
+
+func (f *fakeUpdater) Open(_ context.Context, developerID, appID, account string) error {
+	f.steps = append(f.steps, "open")
+	f.developerID = developerID
+	f.appID = appID
+	f.account = account
+	if f.failAt == "open" {
+		return errors.New("open failed")
+	}
+	return nil
+}
+
+func (f *fakeUpdater) Read(context.Context) (*webdriver.AppSettingsState, error) {
+	f.steps = append(f.steps, "read")
+	if f.failAt == "read" {
+		return nil, errors.New("read failed")
+	}
+	if len(f.states) == 0 {
+		return nil, errors.New("no fake state")
+	}
+	state := f.states[0]
+	f.states = f.states[1:]
+	return &state, nil
+}
+
+func (f *fakeUpdater) SetClassification(_ context.Context, kind, category string) error {
+	f.steps = append(f.steps, "set")
+	f.setKind = kind
+	f.setCategory = category
+	if f.failAt == "set" {
+		return errors.New("set failed")
+	}
+	return nil
+}
+
+func (f *fakeUpdater) Submit(context.Context, time.Duration) error {
+	f.steps = append(f.steps, "submit")
+	if f.failAt == "submit" {
+		return errors.New("submit failed")
+	}
+	return nil
+}
+
+func (f *fakeUpdater) Close() error { return nil }
+
+func stubUpdater(t *testing.T, f *fakeUpdater) {
+	t.Helper()
+	orig := newAppUpdater
+	newAppUpdater = func(context.Context, string, time.Duration) (appUpdater, error) { return f, nil }
+	t.Cleanup(func() { newAppUpdater = orig })
+}
+
+func setupUpdate(t *testing.T, f *fakeUpdater) {
+	t.Helper()
+	useTempSessionDir(t)
+	saveWebSession(t, "me@example.com")
+	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
+	stubUpdater(t, f)
+}
+
+func TestWebAppsUpdate_NoOpSkipsWrite(t *testing.T) {
+	f := &fakeUpdater{states: []webdriver.AppSettingsState{{Kind: "game", Category: "Educational"}}}
+	setupUpdate(t, f)
+
+	cmd := WebAppsUpdateCommand()
+	if err := cmd.FlagSet.Parse(updateArgs()); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got := strings.Join(f.steps, ","); got != "open,read" {
+		t.Errorf("steps = %s, want open,read", got)
+	}
+	if !strings.Contains(stdout, `"changed":false`) {
+		t.Errorf("output = %s, want unchanged result", stdout)
+	}
+}
+
+func TestWebAppsUpdate_DrivesAndVerifiesForm(t *testing.T) {
+	f := &fakeUpdater{states: []webdriver.AppSettingsState{
+		{Kind: "app", Category: "Education"},
+		{Kind: "game", Category: "Educational", CanSubmit: true},
+		{Kind: "game", Category: "Educational"},
+	}}
+	setupUpdate(t, f)
+
+	cmd := WebAppsUpdateCommand()
+	if err := cmd.FlagSet.Parse(updateArgs()); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got := strings.Join(f.steps, ","); got != "open,read,set,read,submit,open,read" {
+		t.Errorf("steps = %s", got)
+	}
+	if f.developerID != authDeveloperID || f.appID != "555" {
+		t.Errorf("opened developer/app = %s/%s", f.developerID, f.appID)
+	}
+	if f.account != "me@example.com" {
+		t.Errorf("opened account = %q", f.account)
+	}
+	if f.setKind != "game" || f.setCategory != "Educational" {
+		t.Errorf("set classification = %q/%q", f.setKind, f.setCategory)
+	}
+	for _, want := range []string{`"kind":"game"`, `"category":"Educational"`, `"changed":true`} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("output = %s, want %s", stdout, want)
+		}
+	}
+}
+
+func TestWebAppsUpdate_RefusesUnsafeSubmit(t *testing.T) {
+	tests := []struct {
+		name  string
+		state webdriver.AppSettingsState
+		want  string
+	}{
+		{name: "mismatch", state: webdriver.AppSettingsState{Kind: "app", Category: "Educational", CanSubmit: true}, want: "does not match"},
+		{name: "disabled", state: webdriver.AppSettingsState{Kind: "game", Category: "Educational"}, want: "not ready"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &fakeUpdater{states: []webdriver.AppSettingsState{{Kind: "app", Category: "Education"}, tt.state}}
+			setupUpdate(t, f)
+
+			cmd := WebAppsUpdateCommand()
+			if err := cmd.FlagSet.Parse(updateArgs()); err != nil {
+				t.Fatal(err)
+			}
+			err := cmd.Exec(context.Background(), nil)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v, want %q", err, tt.want)
+			}
+			if slices.Contains(f.steps, "submit") {
+				t.Fatal("must not submit an unverified form")
+			}
+		})
+	}
+}
+
+func TestWebAppsUpdate_VerifiesSavedValue(t *testing.T) {
+	f := &fakeUpdater{states: []webdriver.AppSettingsState{
+		{Kind: "app", Category: "Education"},
+		{Kind: "game", Category: "Educational", CanSubmit: true},
+		{Kind: "app", Category: "Education"},
+	}}
+	setupUpdate(t, f)
+
+	cmd := WebAppsUpdateCommand()
+	if err := cmd.FlagSet.Parse(updateArgs()); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.Exec(context.Background(), nil)
+	if err == nil || !strings.Contains(err.Error(), "was not saved") {
+		t.Errorf("err = %v, want post-save verification error", err)
+	}
+}
+
+func TestWebAppsUpdate_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
+	useTempSessionDir(t)
+	saveWebSession(t, "me@example.com")
+	mockWebClient(t, appsListMock(t, `{"1":[]}`))
+	f := &fakeUpdater{failAt: "open"}
+	stubUpdater(t, f)
+
+	cmd := WebAppsUpdateCommand()
+	if err := cmd.FlagSet.Parse(updateArgs()); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.Exec(context.Background(), nil)
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("err = %v, want package-not-found error", err)
+	}
+	if len(f.steps) != 0 {
+		t.Errorf("browser steps = %v, want none", f.steps)
 	}
 }

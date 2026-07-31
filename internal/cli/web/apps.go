@@ -23,17 +23,18 @@ func WebAppsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "apps",
 		ShortUsage: "gplay web apps <subcommand> [flags]",
-		ShortHelp:  "Manage apps via the Play Console web session.",
+		ShortHelp:  "Manage apps through a Play Console web session.",
 		LongHelp: `Manage apps through Play Console's internal web APIs.
 
-These commands use the browser-session auth from "gplay web auth login", not
-the service-account API, because the official Android Publisher API has no
-endpoint for enumerating the apps in a developer account.`,
+These commands use the browser-session auth from "gplay web auth login" for
+Play Console capabilities that the official Android Publisher API does not
+provide, including listing and creating apps and changing App category.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			WebAppsListCommand(),
 			WebAppsCreateCommand(),
+			WebAppsUpdateCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -156,9 +157,7 @@ func (c browserCreator) Submit(ctx context.Context, timeout time.Duration) (stri
 }
 func (c browserCreator) Close() error { return c.b.Close() }
 
-// newAppCreator connects to the gplay-managed Chrome profile, starting it if
-// it is not already running. Overridden in tests.
-var newAppCreator = func(ctx context.Context, userDataDir string, timeout time.Duration) (appCreator, error) {
+func connectAppBrowser(ctx context.Context, userDataDir string, timeout time.Duration) (*webdriver.Browser, error) {
 	if !webdriver.Running(userDataDir) {
 		if err := chromeLauncher(ctx, userDataDir, consoleLoginURL); err != nil {
 			return nil, err
@@ -167,6 +166,16 @@ var newAppCreator = func(ctx context.Context, userDataDir string, timeout time.D
 	b, err := webdriver.Connect(ctx, userDataDir, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("%w\n\nIf a gplay Chrome window is already open without debugging enabled, quit it and rerun", err)
+	}
+	return b, nil
+}
+
+// newAppCreator connects to the gplay-managed Chrome profile, starting it if
+// it is not already running. Overridden in tests.
+var newAppCreator = func(ctx context.Context, userDataDir string, timeout time.Duration) (appCreator, error) {
+	b, err := connectAppBrowser(ctx, userDataDir, timeout)
+	if err != nil {
+		return nil, err
 	}
 	return browserCreator{b: b}, nil
 }
@@ -331,6 +340,212 @@ Examples:
 				DeveloperID: req.DeveloperID,
 				Language:    req.DefaultLanguage,
 			}, *outputFlag, *pretty)
+		},
+	}
+}
+
+// appUpdater drives the console's Store settings form. It exists so updates
+// can be tested without changing a real Play Console app.
+type appUpdater interface {
+	Open(ctx context.Context, developerID, appID, account string) error
+	Read(ctx context.Context) (*webdriver.AppSettingsState, error)
+	SetClassification(ctx context.Context, kind, category string) error
+	Submit(ctx context.Context, timeout time.Duration) error
+	Close() error
+}
+
+type browserUpdater struct{ b *webdriver.Browser }
+
+func (u browserUpdater) Open(ctx context.Context, developerID, appID, account string) error {
+	return webdriver.OpenAppSettings(ctx, u.b, developerID, appID, account)
+}
+func (u browserUpdater) Read(ctx context.Context) (*webdriver.AppSettingsState, error) {
+	return webdriver.ReadAppSettings(ctx, u.b)
+}
+func (u browserUpdater) SetClassification(ctx context.Context, kind, category string) error {
+	return webdriver.SetAppClassification(ctx, u.b, kind, category)
+}
+func (u browserUpdater) Submit(ctx context.Context, timeout time.Duration) error {
+	return webdriver.SubmitAppSettings(ctx, u.b, timeout)
+}
+func (u browserUpdater) Close() error { return u.b.Close() }
+
+var newAppUpdater = func(ctx context.Context, userDataDir string, timeout time.Duration) (appUpdater, error) {
+	b, err := connectAppBrowser(ctx, userDataDir, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return browserUpdater{b: b}, nil
+}
+
+type appUpdateResult struct {
+	PackageName string `json:"packageName"`
+	Kind        string `json:"kind"`
+	Category    string `json:"category"`
+	Changed     bool   `json:"changed"`
+}
+
+func registerAppUpdateTable() {
+	output.RegisterType(&appUpdateResult{},
+		[]string{"PACKAGE", "KIND", "CATEGORY", "CHANGED"},
+		func(data any) [][]string {
+			result, ok := data.(*appUpdateResult)
+			if !ok {
+				return nil
+			}
+			return [][]string{{result.PackageName, result.Kind, result.Category, fmt.Sprint(result.Changed)}}
+		})
+}
+
+// WebAppsUpdateCommand returns the `gplay web apps update` subcommand.
+func WebAppsUpdateCommand() *ffcli.Command {
+	registerAppUpdateTable()
+	fs := flag.NewFlagSet("web apps update", flag.ExitOnError)
+	pkg := fs.String("package", "", "Package name (applicationId)")
+	kind := fs.String("kind", "", "New application type: app or game")
+	category := fs.String("category", "", "Google Play category label, e.g. Education")
+	developerID := fs.String("developer", "", "Developer account ID (numeric; default: auto-discover)")
+	account := fs.String("account", "", "Web session account email (default: last used session)")
+	confirm := fs.Bool("confirm", false, "Confirm the App category change")
+	outputFlag := fs.String("output", "json", "Output format: json (default), table, markdown")
+	pretty := fs.Bool("pretty", false, "Pretty-print JSON output")
+
+	return &ffcli.Command{
+		Name:       "update",
+		ShortUsage: "gplay web apps update --package <id> --kind <app|game> --category <label> --confirm",
+		ShortHelp:  "Update an existing package's App category.",
+		LongHelp: `Update an existing Play Console package's application type and required category.
+
+This uses Store settings in the gplay-managed browser because the official
+Android Publisher API cannot change App category. Sign in once with:
+  gplay web auth login --email <email> --browser
+
+Only App category belongs here. Use "gplay listings patch" for localized app
+names and "gplay details patch" for default language or contact details. App
+pricing is intentionally excluded because changing a paid app to free can make
+a later change back to paid impossible.
+
+Examples:
+  gplay web apps update --package com.example.app --kind app --category Education --confirm
+  gplay --dry-run web apps update --package com.example.app --kind game --category Educational --confirm`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			if err := shared.ValidateOutputFlags(*outputFlag, *pretty); err != nil {
+				return err
+			}
+			packageName := strings.TrimSpace(*pkg)
+			if packageName == "" {
+				return fmt.Errorf("--package is required")
+			}
+			requestedKind := strings.TrimSpace(*kind)
+			if requestedKind != string(webclient.AppKindApp) && requestedKind != string(webclient.AppKindGame) {
+				return fmt.Errorf("--kind must be app or game")
+			}
+			requestedCategory := strings.TrimSpace(*category)
+			if requestedCategory == "" {
+				return fmt.Errorf("--category is required")
+			}
+			if !*confirm {
+				return fmt.Errorf("--confirm is required to update an app")
+			}
+
+			if shared.IsDryRun(ctx) {
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would update app: package=%s kind=%s category=%q\n", packageName, requestedKind, requestedCategory) // #nosec G705 -- stderr log
+				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
+				return nil
+			}
+
+			ctx, cancel := shared.ContextWithTimeout(ctx, nil)
+			defer cancel()
+			sess, err := sessionLoad(strings.TrimSpace(*account))
+			if err != nil {
+				return err
+			}
+			client := newWebClient(sess)
+			developer := strings.TrimSpace(*developerID)
+			if developer == "" {
+				if developer, err = client.DiscoverDeveloperID(ctx); err != nil {
+					return fmt.Errorf("discovering developer ID (pass --developer to skip): %w", err)
+				}
+			}
+			apps, err := client.ListApps(ctx, developer)
+			if err != nil {
+				return err
+			}
+			var target *webclient.App
+			for i := range apps {
+				if apps[i].PackageName == packageName {
+					target = &apps[i]
+					break
+				}
+			}
+			if target == nil {
+				return fmt.Errorf("package %s was not found in developer account %s", packageName, developer)
+			}
+			if target.DeveloperID == "" {
+				target.DeveloperID = developer
+			}
+			if target.AppID == "" {
+				return fmt.Errorf("Play Console did not return an app ID for package %s", packageName)
+			}
+
+			updater, err := newAppUpdater(ctx, websession.BrowserProfileDir(), 90*time.Second)
+			if err != nil {
+				return err
+			}
+			defer updater.Close()
+
+			if err := updater.Open(ctx, target.DeveloperID, target.AppID, sess.UserEmail); err != nil {
+				return err
+			}
+			current, err := updater.Read(ctx)
+			if err != nil {
+				return err
+			}
+			if current.Kind == "" {
+				return fmt.Errorf("could not read the current application type; nothing was changed")
+			}
+			result := &appUpdateResult{
+				PackageName: packageName,
+				Kind:        current.Kind,
+				Category:    current.Category,
+			}
+			if current.Kind == requestedKind && strings.EqualFold(current.Category, requestedCategory) {
+				return shared.PrintOutput(result, *outputFlag, *pretty)
+			}
+
+			if err := updater.SetClassification(ctx, requestedKind, requestedCategory); err != nil {
+				return err
+			}
+			pending, err := updater.Read(ctx)
+			if err != nil {
+				return err
+			}
+			if pending.Kind != requestedKind || !strings.EqualFold(pending.Category, requestedCategory) {
+				return fmt.Errorf("the App category form does not match the request (got kind=%q category=%q); nothing was changed", pending.Kind, pending.Category)
+			}
+			if !pending.CanSubmit {
+				return fmt.Errorf("the console reports App category is not ready to save; nothing was changed")
+			}
+			if err := updater.Submit(ctx, 2*time.Minute); err != nil {
+				return err
+			}
+			if err := updater.Open(ctx, target.DeveloperID, target.AppID, sess.UserEmail); err != nil {
+				return fmt.Errorf("reopening App category after save: %w", err)
+			}
+			saved, err := updater.Read(ctx)
+			if err != nil {
+				return err
+			}
+			if saved.Kind != requestedKind || !strings.EqualFold(saved.Category, requestedCategory) {
+				return fmt.Errorf("App category was not saved (got kind=%q category=%q, want kind=%q category=%q)",
+					saved.Kind, saved.Category, requestedKind, requestedCategory)
+			}
+			result.Kind = saved.Kind
+			result.Category = saved.Category
+			result.Changed = true
+			return shared.PrintOutput(result, *outputFlag, *pretty)
 		},
 	}
 }
