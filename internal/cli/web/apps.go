@@ -41,6 +41,9 @@ country availability, and sending changes for review.`,
 			WebAppsPricingCommand(),
 			WebAppsReviewCommand(),
 			WebAppsRolloutCommand(),
+			WebAppsDeclarationsCommand(),
+			WebAppsPolicyCommand(),
+			WebAppsPublishCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {

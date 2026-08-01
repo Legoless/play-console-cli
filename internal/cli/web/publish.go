@@ -38,6 +38,12 @@ type publishBrowser interface {
 	OpenDraftRelease(ctx context.Context) (*webdriver.PrepareState, error)
 	ReviewDraftRelease(ctx context.Context) (*webdriver.ReviewState, error)
 	SaveReleaseReview(ctx context.Context, timeout time.Duration) error
+	ReadDeclarations(ctx context.Context, developerID, appID, account string) (*webdriver.DeclarationsState, error)
+	SetPrivacyPolicyURL(ctx context.Context, developerID, appID, account, url string) (bool, error)
+	SetRadioDeclaration(ctx context.Context, developerID, appID, account, page string, yes bool) (bool, error)
+	ReadPolicyStatus(ctx context.Context, developerID, appID, account string) (*webdriver.PolicyStatus, error)
+	SetManagedPublishing(ctx context.Context, developerID, appID, account string, on bool) error
+	PublishApprovedChanges(ctx context.Context, developerID, appID, account string, timeout time.Duration) error
 	Close() error
 }
 
@@ -99,6 +105,24 @@ func (p browserPublish) ReviewDraftRelease(ctx context.Context) (*webdriver.Revi
 }
 func (p browserPublish) SaveReleaseReview(ctx context.Context, timeout time.Duration) error {
 	return webdriver.SaveReleaseReview(ctx, p.b, timeout)
+}
+func (p browserPublish) ReadDeclarations(ctx context.Context, developerID, appID, account string) (*webdriver.DeclarationsState, error) {
+	return webdriver.ReadDeclarations(ctx, p.b, developerID, appID, account)
+}
+func (p browserPublish) SetPrivacyPolicyURL(ctx context.Context, developerID, appID, account, url string) (bool, error) {
+	return webdriver.SetPrivacyPolicyURL(ctx, p.b, developerID, appID, account, url)
+}
+func (p browserPublish) SetRadioDeclaration(ctx context.Context, developerID, appID, account, page string, yes bool) (bool, error) {
+	return webdriver.SetRadioDeclaration(ctx, p.b, developerID, appID, account, page, yes)
+}
+func (p browserPublish) ReadPolicyStatus(ctx context.Context, developerID, appID, account string) (*webdriver.PolicyStatus, error) {
+	return webdriver.ReadPolicyStatus(ctx, p.b, developerID, appID, account)
+}
+func (p browserPublish) SetManagedPublishing(ctx context.Context, developerID, appID, account string, on bool) error {
+	return webdriver.SetManagedPublishing(ctx, p.b, developerID, appID, account, on)
+}
+func (p browserPublish) PublishApprovedChanges(ctx context.Context, developerID, appID, account string, timeout time.Duration) error {
+	return webdriver.PublishApprovedChanges(ctx, p.b, developerID, appID, account, timeout)
 }
 func (p browserPublish) Close() error { return p.b.Close() }
 

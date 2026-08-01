@@ -332,6 +332,9 @@
 - [web apps pricing](#web-apps-pricing)
 - [web apps review](#web-apps-review)
 - [web apps rollout](#web-apps-rollout)
+- [web apps declarations](#web-apps-declarations)
+- [web apps policy](#web-apps-policy)
+- [web apps publish](#web-apps-publish)
 - [update](#update)
 - [completion](#completion)
 - [completion bash](#completion-bash)
@@ -8017,6 +8020,112 @@ Examples:
 | `--account` | Web session account email (default: last used session) | `` |
 | `--confirm` | Confirm rolling out the draft release | `false` |
 | `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps declarations
+
+Read App content declarations, or set the simple ones.
+
+```
+gplay web apps declarations --package <id> [--set <key> [--url <url> | --value <yes|no>] --confirm]
+```
+
+Read the App content policy declarations, or change the simple ones.
+
+Without --set this lists every declaration with its status and last-edited
+date, plus anything needing attention. Setting requires --confirm and
+verifies the persisted answer afterwards.
+
+Settable declarations:
+  privacy-policy       --url <https://...>
+  government-apps      --value yes|no
+  ads-declaration      --value yes|no
+  testing-credentials  --value no (adding credentials needs the console)
+
+Content rating, target audience, data safety, health, and financial features
+are multi-step questionnaires; answer them in the console. These commands
+drive the console because the official Android Publisher API has no
+declaration endpoints. Always confirm changes with the user first.
+
+Examples:
+  gplay web apps declarations --package com.example.app
+  gplay web apps declarations --package com.example.app --set privacy-policy --url https://example.com/privacy --confirm
+  gplay web apps declarations --package com.example.app --set government-apps --value no --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--confirm` | Confirm the declaration change | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--set` | Declaration to change: privacy-policy, government-apps, ads-declaration, testing-credentials | `` |
+| `--url` | Privacy policy URL (with --set privacy-policy) | `` |
+| `--value` | Answer for radio declarations: yes or no | `` |
+
+---
+
+## gplay web apps policy
+
+Read the app's Play policy status and reported issues.
+
+```
+gplay web apps policy --package <id>
+```
+
+Read the Policy status page: reported policy issues, or the empty
+state shown when nothing is reported. Before the first review completes, the
+page shows that compliance information appears after review. Read-only.
+
+Examples:
+  gplay web apps policy --package com.example.app
+  gplay web apps policy --package com.example.app --output table
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps publish
+
+Publish approved changes, or toggle managed publishing.
+
+```
+gplay web apps publish --package <id> [--managed on|off --confirm | --confirm]
+```
+
+Publish approved changes from the Publishing overview, or toggle
+managed publishing.
+
+Without flags this reports the managed publishing state and whether anything
+is publishable. With --managed on|off (and --confirm) it toggles managed
+publishing and verifies the new state. With --confirm alone it clicks the
+Publish action that appears once Google approves the reviewed changes.
+
+These drive the Publishing overview because the official Android Publisher
+API has no publish endpoint. Always confirm with the user first.
+
+Examples:
+  gplay web apps publish --package com.example.app
+  gplay web apps publish --package com.example.app --managed on --confirm
+  gplay web apps publish --package com.example.app --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--confirm` | Confirm publishing / the managed publishing change | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--managed` | Set managed publishing: on or off | `` |
 | `--output` | Output format: json (default), table, markdown | `json` |
 | `--package` | Package name (applicationId) | `` |
 | `--pretty` | Pretty-print JSON output | `false` |

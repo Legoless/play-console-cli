@@ -13,20 +13,26 @@ import (
 )
 
 type fakePublishBrowser struct {
-	steps       []string
-	overviews   []*webdriver.PublishingOverview
-	setup       *webdriver.AppSetup
-	countries   []webdriver.CountriesState
-	pricing     []webdriver.AppPricingState
-	prepare     *webdriver.PrepareState
-	review      *webdriver.ReviewState
-	setNames    []string
-	unsetNames  []string
-	setPrice    string
-	developerID string
-	appID       string
-	account     string
-	failAt      string
+	steps         []string
+	overviews     []*webdriver.PublishingOverview
+	setup         *webdriver.AppSetup
+	countries     []webdriver.CountriesState
+	pricing       []webdriver.AppPricingState
+	prepare       *webdriver.PrepareState
+	review        *webdriver.ReviewState
+	declarations  *webdriver.DeclarationsState
+	policy        *webdriver.PolicyStatus
+	setNames      []string
+	unsetNames    []string
+	setPrice      string
+	setPrivacyURL string
+	setRadioPage  string
+	setRadioYes   bool
+	setManagedOn  bool
+	developerID   string
+	appID         string
+	account       string
+	failAt        string
 }
 
 func (f *fakePublishBrowser) ReadOverview(_ context.Context, developerID, appID, account string) (*webdriver.PublishingOverview, error) {
@@ -199,6 +205,58 @@ func (f *fakePublishBrowser) SaveReleaseReview(context.Context, time.Duration) e
 	f.steps = append(f.steps, "save-review")
 	if f.failAt == "save-review" {
 		return errors.New("save review failed")
+	}
+	return nil
+}
+
+func (f *fakePublishBrowser) ReadDeclarations(_ context.Context, developerID, appID, account string) (*webdriver.DeclarationsState, error) {
+	f.steps = append(f.steps, "read-declarations")
+	f.developerID, f.appID, f.account = developerID, appID, account
+	if f.declarations == nil {
+		return nil, errors.New("no fake declarations")
+	}
+	return f.declarations, nil
+}
+
+func (f *fakePublishBrowser) SetPrivacyPolicyURL(_ context.Context, developerID, appID, account, url string) (bool, error) {
+	f.steps = append(f.steps, "set-privacy-url")
+	f.setPrivacyURL = url
+	if f.failAt == "set-privacy-url" {
+		return false, errors.New("set privacy url failed")
+	}
+	return true, nil
+}
+
+func (f *fakePublishBrowser) SetRadioDeclaration(_ context.Context, developerID, appID, account, page string, yes bool) (bool, error) {
+	f.steps = append(f.steps, "set-radio")
+	f.setRadioPage, f.setRadioYes = page, yes
+	if f.failAt == "set-radio" {
+		return false, errors.New("set radio failed")
+	}
+	return true, nil
+}
+
+func (f *fakePublishBrowser) ReadPolicyStatus(context.Context, string, string, string) (*webdriver.PolicyStatus, error) {
+	f.steps = append(f.steps, "read-policy")
+	if f.policy == nil {
+		return nil, errors.New("no fake policy status")
+	}
+	return f.policy, nil
+}
+
+func (f *fakePublishBrowser) SetManagedPublishing(_ context.Context, developerID, appID, account string, on bool) error {
+	f.steps = append(f.steps, "set-managed")
+	f.setManagedOn = on
+	if f.failAt == "set-managed" {
+		return errors.New("set managed failed")
+	}
+	return nil
+}
+
+func (f *fakePublishBrowser) PublishApprovedChanges(context.Context, string, string, string, time.Duration) error {
+	f.steps = append(f.steps, "publish-now")
+	if f.failAt == "publish-now" {
+		return errors.New("publish failed")
 	}
 	return nil
 }
