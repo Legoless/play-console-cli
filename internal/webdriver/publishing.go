@@ -90,7 +90,11 @@ const publishHelpers = `
     const m = s && /submit (\d+) changes? for review/i.exec(s.innerText || '');
     return m ? Number(m[1]) : 0;
   };
-  window.__gplayPublish = { section, sendButton, changes, blockedReason, managedPublishing, summaryCount };
+  // While Google reviews, the overview shows a "Changes in review" section;
+  // right after sending it also says "N changes sent for review".
+  const inReview = () =>
+    /changes in review|changes are now in review/i.test(document.body.innerText || '');
+  window.__gplayPublish = { section, sendButton, changes, blockedReason, managedPublishing, summaryCount, inReview };
   return true;
 })()
 `
@@ -112,6 +116,8 @@ type PublishingOverview struct {
 	// SummaryPendingCount is the count from the send button's "Submit N
 	// changes for review" label, used when the changes table renders no rows.
 	SummaryPendingCount int `json:"summaryPendingCount,omitempty"`
+	// InReview reports whether the overview shows the changes as in review.
+	InReview bool `json:"inReview"`
 }
 
 const readPublishingOverviewScript = `(() => {
@@ -123,6 +129,7 @@ const readPublishingOverviewScript = `(() => {
     sendBlockedReason: p.blockedReason(),
     managedPublishing: p.managedPublishing(),
     summaryPendingCount: p.summaryCount(),
+    inReview: p.inReview(),
   };
 })()`
 
@@ -168,7 +175,7 @@ func ReadPublishingOverview(ctx context.Context, b *Browser, developerID, appID,
 	// Disabled with no explanation means the reviewability evaluation was
 	// still in flight. Wait for the definitive state, then read once more.
 	settled := formHelpers + ` && ` + publishHelpers + ` && ` + publishingOverviewSettledScript
-	if err := b.EvalUntil(ctx, settled, 30*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, settled, 60*time.Second); err != nil {
 		return &overview, nil // best effort: treat as blocked without a reason
 	}
 	if err := b.Eval(ctx, readPublishingOverviewScript, &overview); err != nil {

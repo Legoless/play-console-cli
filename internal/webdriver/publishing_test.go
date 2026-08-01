@@ -82,6 +82,25 @@ func TestReadPublishingOverview(t *testing.T) {
 	}
 }
 
+func TestReadPublishingOverview_ReadsInReviewState(t *testing.T) {
+	f := newFakeChrome(t)
+	f.setReply(overviewReadyExpr(), true)
+	f.setReply(formHelpers+` && `+publishHelpers+` && `+publishingOverviewSettledScript, true)
+	f.setReply(readPublishingOverviewScript, map[string]any{
+		"pendingChanges": []map[string]any{},
+		"inReview":       true,
+	})
+	b := connectFake(t, f)
+
+	overview, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	if err != nil {
+		t.Fatalf("ReadPublishingOverview: %v", err)
+	}
+	if !overview.InReview {
+		t.Error("InReview = false, want true")
+	}
+}
+
 func countSeen(f *fakeChrome, expr string) int {
 	n := 0
 	for _, seen := range f.seen {
