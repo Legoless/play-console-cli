@@ -80,7 +80,7 @@ func TestWebAppsCommands_RegisteredInGroup(t *testing.T) {
 	for _, sub := range WebAppsCommand().Subcommands {
 		names = append(names, sub.Name)
 	}
-	for _, want := range []string{"list", "create", "update"} {
+	for _, want := range []string{"list", "create", "update", "status", "availability", "pricing", "review", "rollout"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("web apps subcommands = %v, want %q", names, want)
 		}

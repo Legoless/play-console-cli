@@ -187,6 +187,50 @@ func (b *Browser) Navigate(ctx context.Context, url string) error {
 	return err
 }
 
+// MouseClick dispatches a trusted mouse click at the given viewport
+// coordinates. Some console controls ignore synthetic element.click() calls
+// (proven against the live console's bulk-price save); trusted CDP input
+// reaches the same handlers as a real user click. A hover precedes the press
+// because some controls arm their handlers on pointerover.
+func (b *Browser) MouseClick(ctx context.Context, x, y float64) error {
+	if _, err := b.send(ctx, "Input.dispatchMouseEvent", map[string]any{
+		"type": "mouseMoved", "x": x, "y": y, "button": "none",
+	}); err != nil {
+		return err
+	}
+	if _, err := b.send(ctx, "Input.dispatchMouseEvent", map[string]any{
+		"type": "mousePressed", "x": x, "y": y, "button": "left", "clickCount": 1,
+	}); err != nil {
+		return err
+	}
+	_, err := b.send(ctx, "Input.dispatchMouseEvent", map[string]any{
+		"type": "mouseReleased", "x": x, "y": y, "button": "left", "clickCount": 1,
+	})
+	return err
+}
+
+// InsertText types text as a real keyboard would, into the focused element.
+// The console is a compiled Dart app whose text fields do not always pick up
+// values set via element.value plus synthetic events; trusted text insertion
+// is indistinguishable from typing.
+func (b *Browser) InsertText(ctx context.Context, text string) error {
+	_, err := b.send(ctx, "Input.insertText", map[string]any{"text": text})
+	return err
+}
+
+// PressEnter dispatches a trusted Enter key press, into the focused element.
+func (b *Browser) PressEnter(ctx context.Context) error {
+	for _, typ := range []string{"keyDown", "keyUp"} {
+		if _, err := b.send(ctx, "Input.dispatchKeyEvent", map[string]any{
+			"type": typ, "key": "Enter", "code": "Enter",
+			"windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // evalResult is the shape of Runtime.evaluate's reply.
 type evalResult struct {
 	Result struct {
@@ -277,4 +321,16 @@ func Running(userDataDir string) bool {
 	}
 	_ = conn.Close()
 	return true
+}
+
+// BringToFront activates the attached page's tab.
+func BringToFront(ctx context.Context, b *Browser) error {
+	_, err := b.send(ctx, "Page.bringToFront", nil)
+	return err
+}
+
+// Reload refreshes the page, bypassing the cache.
+func Reload(ctx context.Context, b *Browser) error {
+	_, err := b.send(ctx, "Page.reload", map[string]any{"ignoreCache": true})
+	return err
 }

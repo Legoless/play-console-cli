@@ -327,6 +327,11 @@
 - [web apps list](#web-apps-list)
 - [web apps create](#web-apps-create)
 - [web apps update](#web-apps-update)
+- [web apps status](#web-apps-status)
+- [web apps availability](#web-apps-availability)
+- [web apps pricing](#web-apps-pricing)
+- [web apps review](#web-apps-review)
+- [web apps rollout](#web-apps-rollout)
 - [update](#update)
 - [completion](#completion)
 - [completion bash](#completion-bash)
@@ -7714,7 +7719,8 @@ Manage apps through Play Console's internal web APIs.
 
 These commands use the browser-session auth from "gplay web auth login" for
 Play Console capabilities that the official Android Publisher API does not
-provide, including listing and creating apps and changing App category.
+provide, including listing and creating apps, changing App category, setting
+country availability, and sending changes for review.
 
 ---
 
@@ -7827,6 +7833,190 @@ Examples:
 | `--confirm` | Confirm the App category change | `false` |
 | `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
 | `--kind` | New application type: app or game | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps status
+
+Show publishing readiness: setup checklist and pending changes.
+
+```
+gplay web apps status --package <id>
+```
+
+Read the app dashboard setup checklist and the Publishing overview.
+
+Reports per-goal progress (including which tasks remain), the app state, the
+changes waiting to be sent for review, whether the console allows sending
+them, and why not. Read-only: it never changes anything.
+
+Examples:
+  gplay web apps status --package com.example.app
+  gplay web apps status --package com.example.app --output table
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps availability
+
+Read or set production country availability.
+
+```
+gplay web apps availability --package <id> [--countries "A,B" | --all-countries --confirm]
+```
+
+Read a track's targeted countries/regions, or set them.
+
+Without --countries or --all-countries this only reports the current
+selection. Changing the selection requires --confirm. The selection is set to
+EXACTLY the given list: named countries are added, previously targeted
+countries missing from the list are removed. The form is verified before
+saving, and the saved selection is re-read afterwards. Country names must
+match the console's display names (e.g. "Slovenia", "United States").
+
+This drives the console's Countries / regions editor because the official
+Android Publisher API cannot change country availability.
+
+Use it to unblock paid apps: when the console refuses a pricing change with
+"Remove <country> to make your app paid", read the current list, then set it
+to the same list minus that country — on every track (production plus each
+testing track's numeric ID) — with the user's confirmation.
+
+Examples:
+  gplay web apps availability --package com.example.app
+  gplay web apps availability --package com.example.app --track 4700073296470937262
+  gplay web apps availability --package com.example.app --countries "Slovenia,Austria" --confirm
+  gplay web apps availability --package com.example.app --all-countries --confirm
+  gplay --dry-run web apps availability --package com.example.app --all-countries --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--all-countries` | Target every country/region | `false` |
+| `--confirm` | Confirm the country availability change | `false` |
+| `--countries` | Comma-separated country names as the console shows them, e.g. "Slovenia,United States" | `` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--track` | Track: "production" or a numeric track ID (console URL after "Manage track") | `production` |
+
+---
+
+## gplay web apps pricing
+
+Read or set the paid app's price.
+
+```
+gplay web apps pricing --package <id> [--price <amount> --confirm]
+```
+
+Read the app pricing state, or set the price for a paid app.
+
+Without --price this only reports the current state. Setting a price requires
+--confirm and works for apps already set to Paid. The amount is in the
+merchant account's home currency (the console asks e.g. "New price in EUR");
+Google converts it to local prices for every targeted country.
+
+This drives the console's App pricing page because the official Android
+Publisher API cannot change app pricing. Making a paid app free is NOT
+supported: that change cannot be undone once the app is published.
+
+If the console refuses to save with "Remove <country> to make your app paid",
+the app targets a country where paid distribution is not allowed (e.g. Sudan,
+or the "Rest of world" pseudo-country). Remove it from EVERY track first —
+with the user's confirmation — using "gplay web apps availability" on
+production and on each testing track (numeric track ID from the console's
+Manage track URL), then retry.
+
+Examples:
+  gplay web apps pricing --package com.example.app
+  gplay web apps pricing --package com.example.app --price 69.99 --confirm
+  gplay --dry-run web apps pricing --package com.example.app --price 69.99 --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--confirm` | Confirm the price change | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--price` | Price in the merchant account's home currency, e.g. 69.99 | `` |
+
+---
+
+## gplay web apps review
+
+Send pending changes for review from the Publishing overview.
+
+```
+gplay web apps review --package <id> --confirm
+```
+
+Send the app's pending Play Console changes to Google for review.
+
+Reads the Publishing overview, refuses when there is nothing to send or when
+the console reports the app is not ready (incomplete setup steps), sends the
+changes, and re-reads the overview to verify the pending list emptied.
+
+This drives the Publishing overview because the official Android Publisher
+API cannot send changes for review.
+
+Examples:
+  gplay web apps review --package com.example.app --confirm
+  gplay --dry-run web apps review --package com.example.app --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--confirm` | Confirm sending changes for review | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps rollout
+
+Roll out the production draft release: preview, confirm, send for review.
+
+```
+gplay web apps rollout --package <id> --confirm
+```
+
+Roll out the production track's draft release to Google for review.
+
+Drives the console's release wizard: opens the draft release, advances through
+Preview and confirm, saves the release into the Publishing overview, then
+sends the pending changes for review. Review warnings are reported but do not
+block the rollout. This is the public release action for a draft app: once
+Google approves, the release goes live (managed publishing off) or can be
+published from the Publishing overview.
+
+This drives the console because the official Android Publisher API cannot
+roll out the first release of a draft app.
+
+Examples:
+  gplay web apps rollout --package com.example.app --confirm
+  gplay --dry-run web apps rollout --package com.example.app --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--confirm` | Confirm rolling out the draft release | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
 | `--output` | Output format: json (default), table, markdown | `json` |
 | `--package` | Package name (applicationId) | `` |
 | `--pretty` | Pretty-print JSON output | `false` |

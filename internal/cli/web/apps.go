@@ -28,13 +28,19 @@ func WebAppsCommand() *ffcli.Command {
 
 These commands use the browser-session auth from "gplay web auth login" for
 Play Console capabilities that the official Android Publisher API does not
-provide, including listing and creating apps and changing App category.`,
+provide, including listing and creating apps, changing App category, setting
+country availability, and sending changes for review.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			WebAppsListCommand(),
 			WebAppsCreateCommand(),
 			WebAppsUpdateCommand(),
+			WebAppsStatusCommand(),
+			WebAppsAvailabilityCommand(),
+			WebAppsPricingCommand(),
+			WebAppsReviewCommand(),
+			WebAppsRolloutCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -344,6 +350,37 @@ Examples:
 	}
 }
 
+// resolveWebApp finds the developer and app IDs for a package through the web
+// session, discovering the developer account when developerFlag is empty.
+func resolveWebApp(ctx context.Context, client webRPCClient, developerFlag, packageName string) (*webclient.App, error) {
+	developer := strings.TrimSpace(developerFlag)
+	if developer == "" {
+		discovered, err := client.DiscoverDeveloperID(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("discovering developer ID (pass --developer to skip): %w", err)
+		}
+		developer = discovered
+	}
+	apps, err := client.ListApps(ctx, developer)
+	if err != nil {
+		return nil, err
+	}
+	for i := range apps {
+		if apps[i].PackageName != packageName {
+			continue
+		}
+		target := &apps[i]
+		if target.DeveloperID == "" {
+			target.DeveloperID = developer
+		}
+		if target.AppID == "" {
+			return nil, fmt.Errorf("Play Console did not return an app ID for package %s", packageName)
+		}
+		return target, nil
+	}
+	return nil, fmt.Errorf("package %s was not found in developer account %s", packageName, developer)
+}
+
 // appUpdater drives the console's Store settings form. It exists so updates
 // can be tested without changing a real Play Console app.
 type appUpdater interface {
@@ -463,31 +500,9 @@ Examples:
 				return err
 			}
 			client := newWebClient(sess)
-			developer := strings.TrimSpace(*developerID)
-			if developer == "" {
-				if developer, err = client.DiscoverDeveloperID(ctx); err != nil {
-					return fmt.Errorf("discovering developer ID (pass --developer to skip): %w", err)
-				}
-			}
-			apps, err := client.ListApps(ctx, developer)
+			target, err := resolveWebApp(ctx, client, *developerID, packageName)
 			if err != nil {
 				return err
-			}
-			var target *webclient.App
-			for i := range apps {
-				if apps[i].PackageName == packageName {
-					target = &apps[i]
-					break
-				}
-			}
-			if target == nil {
-				return fmt.Errorf("package %s was not found in developer account %s", packageName, developer)
-			}
-			if target.DeveloperID == "" {
-				target.DeveloperID = developer
-			}
-			if target.AppID == "" {
-				return fmt.Errorf("Play Console did not return an app ID for package %s", packageName)
 			}
 
 			updater, err := newAppUpdater(ctx, websession.BrowserProfileDir(), 90*time.Second)

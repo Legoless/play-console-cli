@@ -52,6 +52,27 @@ npx skills add tamtom/gplay-cli-skills
 
 Skills repository: [github.com/tamtom/gplay-cli-skills](https://github.com/tamtom/gplay-cli-skills)
 
+## Console-only publish gates (web session)
+
+A few Play Console capabilities have no official API: listing every app, creating apps, changing App category, setting country availability, setting a paid app's price, and sending changes for review. The `gplay web apps` commands cover them by driving the console UI in a managed Chrome, using the browser session from `gplay web auth login` (separate from service-account auth):
+
+- `gplay web apps status --package <id>` — read-only readiness: setup checklist with pending tasks, pending changes, `canSendForReview` and the console's own blocked reason
+- `gplay web apps availability --package <id> [--track <id>] --countries "<a,b>" --confirm` — exact-match country targeting per track (`production` or a numeric track ID)
+- `gplay web apps pricing --package <id> --price <amount> --confirm` — set a paid app's price in the merchant home currency
+- `gplay web apps review --package <id> --confirm` — send pending changes for review
+
+These write commands verify the form before saving and re-read after saving, and they still need user confirmation like any outward action.
+
+### Playbook: "Remove <country> to make your app paid"
+
+When a pricing save is blocked, the app targets a country where paid distribution is not allowed (e.g. Sudan, or the "Rest of world" pseudo-country). The console names one country at a time. With the user's confirmation:
+
+1. Read `gplay web apps status --package <id>` for the setup state.
+2. Read `gplay web apps availability --package <id>` on production and on each testing track (`--track <numeric-id>` from the console's Manage track URL) to find where the country is targeted.
+3. Set each track's list to itself minus the named country: `gplay web apps availability --package <id> [--track <id>] --countries "<current minus country>" --confirm`.
+4. Set the price: `gplay web apps pricing --package <id> --price <amount> --confirm`.
+5. Repeat if the console names another country.
+
 ## Example agent prompts
 
 Things you can ask your agent once `gplay` is installed and authenticated:
