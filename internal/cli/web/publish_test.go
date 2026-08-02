@@ -22,6 +22,10 @@ type fakePublishBrowser struct {
 	review        *webdriver.ReviewState
 	declarations  *webdriver.DeclarationsState
 	policy        *webdriver.PolicyStatus
+	questSteps    []webdriver.QuestionnaireStep
+	questHasNext  bool
+	setChoices    [][]string
+	importedCSV   string
 	setNames      []string
 	unsetNames    []string
 	setPrice      string
@@ -257,6 +261,61 @@ func (f *fakePublishBrowser) PublishApprovedChanges(context.Context, string, str
 	f.steps = append(f.steps, "publish-now")
 	if f.failAt == "publish-now" {
 		return errors.New("publish failed")
+	}
+	return nil
+}
+
+func (f *fakePublishBrowser) OpenQuestionnaire(_ context.Context, developerID, appID, account, page string) error {
+	f.steps = append(f.steps, "open-questionnaire:"+page)
+	f.developerID, f.appID, f.account = developerID, appID, account
+	if f.failAt == "open-questionnaire" {
+		return errors.New("open questionnaire failed")
+	}
+	return nil
+}
+
+func (f *fakePublishBrowser) ReadQuestionnaireStep(context.Context) (*webdriver.QuestionnaireStep, error) {
+	f.steps = append(f.steps, "read-step")
+	if len(f.questSteps) == 0 {
+		return nil, errors.New("no fake questionnaire step")
+	}
+	step := f.questSteps[0]
+	f.questSteps = f.questSteps[1:]
+	return &step, nil
+}
+
+func (f *fakePublishBrowser) SetStepChoices(_ context.Context, ids []string) error {
+	f.steps = append(f.steps, "set-choices")
+	f.setChoices = append(f.setChoices, ids)
+	if f.failAt == "set-choices" {
+		return errors.New("set choices failed")
+	}
+	return nil
+}
+
+func (f *fakePublishBrowser) QuestionnaireNext(context.Context) (bool, error) {
+	f.steps = append(f.steps, "quest-next")
+	return f.questHasNext, nil
+}
+
+func (f *fakePublishBrowser) QuestionnaireSave(context.Context, time.Duration) error {
+	f.steps = append(f.steps, "quest-save")
+	if f.failAt == "quest-save" {
+		return errors.New("quest save failed")
+	}
+	return nil
+}
+
+func (f *fakePublishBrowser) QuestionnaireDiscard(context.Context) error {
+	f.steps = append(f.steps, "quest-discard")
+	return nil
+}
+
+func (f *fakePublishBrowser) ImportDataSafetyCSV(_ context.Context, developerID, appID, account, filePath string) error {
+	f.steps = append(f.steps, "import-csv")
+	f.importedCSV = filePath
+	if f.failAt == "import-csv" {
+		return errors.New("import failed")
 	}
 	return nil
 }

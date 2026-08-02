@@ -41,6 +41,13 @@ type publishBrowser interface {
 	ReadDeclarations(ctx context.Context, developerID, appID, account string) (*webdriver.DeclarationsState, error)
 	SetPrivacyPolicyURL(ctx context.Context, developerID, appID, account, url string) (bool, error)
 	SetRadioDeclaration(ctx context.Context, developerID, appID, account, page string, yes bool) (bool, error)
+	OpenQuestionnaire(ctx context.Context, developerID, appID, account, page string) error
+	ReadQuestionnaireStep(ctx context.Context) (*webdriver.QuestionnaireStep, error)
+	SetStepChoices(ctx context.Context, ids []string) error
+	QuestionnaireNext(ctx context.Context) (bool, error)
+	QuestionnaireSave(ctx context.Context, timeout time.Duration) error
+	QuestionnaireDiscard(ctx context.Context) error
+	ImportDataSafetyCSV(ctx context.Context, developerID, appID, account, filePath string) error
 	ReadPolicyStatus(ctx context.Context, developerID, appID, account string) (*webdriver.PolicyStatus, error)
 	SetManagedPublishing(ctx context.Context, developerID, appID, account string, on bool) error
 	PublishApprovedChanges(ctx context.Context, developerID, appID, account string, timeout time.Duration) error
@@ -114,6 +121,27 @@ func (p browserPublish) SetPrivacyPolicyURL(ctx context.Context, developerID, ap
 }
 func (p browserPublish) SetRadioDeclaration(ctx context.Context, developerID, appID, account, page string, yes bool) (bool, error) {
 	return webdriver.SetRadioDeclaration(ctx, p.b, developerID, appID, account, page, yes)
+}
+func (p browserPublish) OpenQuestionnaire(ctx context.Context, developerID, appID, account, page string) error {
+	return webdriver.OpenQuestionnaire(ctx, p.b, developerID, appID, account, page)
+}
+func (p browserPublish) ReadQuestionnaireStep(ctx context.Context) (*webdriver.QuestionnaireStep, error) {
+	return webdriver.ReadQuestionnaireStep(ctx, p.b)
+}
+func (p browserPublish) SetStepChoices(ctx context.Context, ids []string) error {
+	return webdriver.SetStepChoices(ctx, p.b, ids)
+}
+func (p browserPublish) QuestionnaireNext(ctx context.Context) (bool, error) {
+	return webdriver.QuestionnaireNext(ctx, p.b)
+}
+func (p browserPublish) QuestionnaireSave(ctx context.Context, timeout time.Duration) error {
+	return webdriver.QuestionnaireSave(ctx, p.b, timeout)
+}
+func (p browserPublish) QuestionnaireDiscard(ctx context.Context) error {
+	return webdriver.QuestionnaireDiscard(ctx, p.b)
+}
+func (p browserPublish) ImportDataSafetyCSV(ctx context.Context, developerID, appID, account, filePath string) error {
+	return webdriver.ImportDataSafetyCSV(ctx, p.b, developerID, appID, account, filePath)
 }
 func (p browserPublish) ReadPolicyStatus(ctx context.Context, developerID, appID, account string) (*webdriver.PolicyStatus, error) {
 	return webdriver.ReadPolicyStatus(ctx, p.b, developerID, appID, account)

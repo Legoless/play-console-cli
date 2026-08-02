@@ -218,6 +218,47 @@ func (b *Browser) InsertText(ctx context.Context, text string) error {
 	return err
 }
 
+// SetFileInputFiles sets files on the first file input matching selector, via
+// the DOM domain (works for hidden inputs, which is how the console's upload
+// dialogs are built). Files must be absolute paths on this machine.
+func (b *Browser) SetFileInputFiles(ctx context.Context, selector string, files []string) error {
+	doc, err := b.send(ctx, "DOM.getDocument", map[string]any{"depth": -1})
+	if err != nil {
+		return fmt.Errorf("DOM.getDocument: %w", err)
+	}
+	var docResult struct {
+		Root struct {
+			NodeID int `json:"nodeId"`
+		} `json:"root"`
+	}
+	if err := json.Unmarshal(doc, &docResult); err != nil {
+		return fmt.Errorf("DOM.getDocument: %w", err)
+	}
+	query, err := b.send(ctx, "DOM.querySelector", map[string]any{
+		"nodeId":   docResult.Root.NodeID,
+		"selector": selector,
+	})
+	if err != nil {
+		return fmt.Errorf("DOM.querySelector %q: %w", selector, err)
+	}
+	var queryResult struct {
+		NodeID int `json:"nodeId"`
+	}
+	if err := json.Unmarshal(query, &queryResult); err != nil {
+		return fmt.Errorf("DOM.querySelector %q: %w", selector, err)
+	}
+	if queryResult.NodeID == 0 {
+		return fmt.Errorf("no file input matches %q", selector)
+	}
+	if _, err := b.send(ctx, "DOM.setFileInputFiles", map[string]any{
+		"files":  files,
+		"nodeId": queryResult.NodeID,
+	}); err != nil {
+		return fmt.Errorf("DOM.setFileInputFiles: %w", err)
+	}
+	return nil
+}
+
 // PressEnter dispatches a trusted Enter key press, into the focused element.
 func (b *Browser) PressEnter(ctx context.Context) error {
 	for _, typ := range []string{"keyDown", "keyUp"} {

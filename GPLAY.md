@@ -8028,43 +8028,59 @@ Examples:
 
 ## gplay web apps declarations
 
-Read App content declarations, or set the simple ones.
+Read App content declarations, or set them.
 
 ```
-gplay web apps declarations --package <id> [--set <key> [--url <url> | --value <yes|no>] --confirm]
+gplay web apps declarations --package <id> [--set <key> <input> --confirm]
 ```
 
-Read the App content policy declarations, or change the simple ones.
+Read the App content policy declarations, or change them.
 
 Without --set this lists every declaration with its status and last-edited
 date, plus anything needing attention. Setting requires --confirm and
 verifies the persisted answer afterwards.
 
 Settable declarations:
-  privacy-policy       --url <https://...>
-  government-apps      --value yes|no
-  ads-declaration      --value yes|no
-  testing-credentials  --value no (adding credentials needs the console)
+  privacy-policy          --url <https://...>
+  government-apps         --value yes|no
+  ads-declaration         --value yes|no
+  testing-credentials     --value no (adding credentials needs the console)
+  health                  --answers @file.json
+  finance                 --answers @file.json
+  target-audience-content --answers @file.json
+  psl (data safety)       --csv @answers.csv
 
-Content rating, target audience, data safety, health, and financial features
-are multi-step questionnaires; answer them in the console. These commands
-drive the console because the official Android Publisher API has no
-declaration endpoints. Always confirm changes with the user first.
+--answers is a JSON object with one entry per wizard step, listing the
+POLICY_RESPONSE_CHOICE_ID_* debug ids to select on that step; every other
+choice on the step is deselected:
+  {"steps": [["POLICY_RESPONSE_CHOICE_ID_HEALTH_ACTIVITY_TRACKING"], []]}
+
+--csv imports a data safety answers CSV (the console's own import format;
+download the sample from the Import from CSV dialog). It overwrites the
+form's current answers.
+
+Content rating is not settable: its questionnaire changes the app's IARC
+rating and must be answered in the console. These commands drive the console
+because the official Android Publisher API has no declaration endpoints.
+Always confirm changes with the user first.
 
 Examples:
   gplay web apps declarations --package com.example.app
   gplay web apps declarations --package com.example.app --set privacy-policy --url https://example.com/privacy --confirm
-  gplay web apps declarations --package com.example.app --set government-apps --value no --confirm
+  gplay web apps declarations --package com.example.app --set health --answers @health.json --confirm
+  gplay web apps declarations --package com.example.app --set psl --csv @data-safety.csv --confirm
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--account` | Web session account email (default: last used session) | `` |
+| `--answers` | Questionnaire answers JSON (or @file) for wizard declarations | `` |
 | `--confirm` | Confirm the declaration change | `false` |
+| `--csv` | Data safety answers CSV (or @path) for --set psl | `` |
 | `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
 | `--output` | Output format: json (default), table, markdown | `json` |
 | `--package` | Package name (applicationId) | `` |
 | `--pretty` | Pretty-print JSON output | `false` |
-| `--set` | Declaration to change: privacy-policy, government-apps, ads-declaration, testing-credentials | `` |
+| `--set` | Declaration to change (see list below) | `` |
 | `--url` | Privacy policy URL (with --set privacy-policy) | `` |
 | `--value` | Answer for radio declarations: yes or no | `` |
 

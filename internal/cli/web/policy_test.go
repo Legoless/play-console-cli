@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -241,5 +242,122 @@ func TestWebAppsPublish_PublishesApprovedChanges(t *testing.T) {
 	}
 	if !strings.Contains(stdout, `"published":true`) {
 		t.Errorf("output = %s, want published", stdout)
+	}
+}
+
+func TestWebAppsDeclarations_ValidatesWizardFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "health needs answers", args: availabilityArgs("--set", "health", "--confirm"), want: "--answers"},
+		{name: "psl needs csv", args: availabilityArgs("--set", "psl", "--confirm"), want: "--csv"},
+		{name: "unknown", args: availabilityArgs("--set", "data-safety", "--confirm"), want: "--set must be one of"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := WebAppsDeclarationsCommand()
+			if err := cmd.FlagSet.Parse(tt.args); err != nil {
+				t.Fatal(err)
+			}
+			err := cmd.Exec(context.Background(), nil)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestWebAppsDeclarations_WizardNoOpWhenChoicesMatch(t *testing.T) {
+	f := &fakePublishBrowser{
+		questSteps: []webdriver.QuestionnaireStep{
+			{StepLabel: "1/2", Choices: []webdriver.QuestionnaireChoice{{ID: "CHOICE_A", Selected: true}, {ID: "CHOICE_B"}}, HasNext: true},
+			{StepLabel: "2/2", Choices: []webdriver.QuestionnaireChoice{{ID: "CHOICE_C"}}},
+		},
+		questHasNext: true,
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDeclarationsCommand()
+	args := availabilityArgs("--set", "health", "--answers", `{"steps": [["CHOICE_A"], []]}`, "--confirm")
+	if err := cmd.FlagSet.Parse(args); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("declarations wizard: %v", err)
+	}
+	if slices.Contains(f.steps, "set-choices") || slices.Contains(f.steps, "quest-save") {
+		t.Errorf("steps = %v, must not change or save a matching questionnaire", f.steps)
+	}
+	if !strings.Contains(stdout, `"changed":false`) {
+		t.Errorf("output = %s, want unchanged", stdout)
+	}
+}
+
+func TestWebAppsDeclarations_WizardSavesAndVerifies(t *testing.T) {
+	step := func() []webdriver.QuestionnaireStep {
+		return []webdriver.QuestionnaireStep{
+			{StepLabel: "1/2", Choices: []webdriver.QuestionnaireChoice{{ID: "CHOICE_A", Selected: true}, {ID: "CHOICE_B"}}, HasNext: true},
+			{StepLabel: "2/2", Choices: []webdriver.QuestionnaireChoice{{ID: "CHOICE_C"}}},
+		}
+	}
+	f := &fakePublishBrowser{
+		// First pass: step 1 differs (CHOICE_B wanted, A selected).
+		// Verification pass: both match.
+		questSteps:   append(step(), step()...),
+		questHasNext: true,
+	}
+	// Verification pass must report the applied state.
+	f.questSteps[2].Choices[0].Selected = false
+	f.questSteps[2].Choices[1].Selected = true
+	setupPublish(t, f)
+
+	cmd := WebAppsDeclarationsCommand()
+	args := availabilityArgs("--set", "health", "--answers", `{"steps": [["CHOICE_B"], []]}`, "--confirm")
+	if err := cmd.FlagSet.Parse(args); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("declarations wizard: %v", err)
+	}
+	if len(f.setChoices) != 1 || f.setChoices[0][0] != "CHOICE_B" {
+		t.Errorf("setChoices = %v, want [[CHOICE_B]]", f.setChoices)
+	}
+	if !slices.Contains(f.steps, "quest-save") {
+		t.Errorf("steps = %v, want quest-save", f.steps)
+	}
+	if !strings.Contains(stdout, `"changed":true`) {
+		t.Errorf("output = %s, want changed", stdout)
+	}
+}
+
+func TestWebAppsDeclarations_ImportsDataSafetyCSV(t *testing.T) {
+	f := &fakePublishBrowser{questHasNext: false}
+	setupPublish(t, f)
+
+	csv := t.TempDir() + "/answers.csv"
+	if err := os.WriteFile(csv, []byte("a,b\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := WebAppsDeclarationsCommand()
+	args := availabilityArgs("--set", "psl", "--csv", csv, "--confirm")
+	if err := cmd.FlagSet.Parse(args); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("declarations psl: %v", err)
+	}
+	if f.importedCSV != csv {
+		t.Errorf("imported = %q, want %q", f.importedCSV, csv)
+	}
+	if !slices.Contains(f.steps, "quest-save") {
+		t.Errorf("steps = %v, want quest-save after import", f.steps)
+	}
+	if !strings.Contains(stdout, `"changed":true`) {
+		t.Errorf("output = %s, want changed", stdout)
 	}
 }

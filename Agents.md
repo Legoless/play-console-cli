@@ -50,7 +50,7 @@ gplay web apps availability     # Read or set track country availability (produc
 gplay web apps pricing          # Read or set the paid app's price (wizard-driven, staged + saved)
 gplay web apps review           # Send pending changes for review from the Publishing overview
 gplay web apps rollout          # Roll out the production draft release: preview, confirm, send for review
-gplay web apps declarations     # Read App content declarations; set simple ones (privacy URL, yes/no radios)
+gplay web apps declarations     # Read/set App content declarations (privacy URL, radios, questionnaires, CSV import)
 gplay web apps policy           # Read Play policy status and reported issues
 gplay web apps publish          # Publish approved changes; toggle managed publishing
 gplay listings locales          # List available locales with validation

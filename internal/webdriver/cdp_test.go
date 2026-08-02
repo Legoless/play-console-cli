@@ -25,6 +25,7 @@ type fakeChrome struct {
 	mu      sync.Mutex
 	replies map[string]any // expression -> value returned
 	fail    map[string]string
+	dom     map[string]json.RawMessage // DOM.* method -> result payload
 	seen    []string
 }
 
@@ -46,9 +47,21 @@ func (f *fakeChrome) setReply(expr string, value any) {
 	f.replies[expr] = value
 }
 
+// setDOMReply scripts a DOM-domain method answer.
+func (f *fakeChrome) setDOMReply(t *testing.T, method string, result any) {
+	t.Helper()
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dom[method] = raw
+}
+
 func newFakeChrome(t *testing.T) *fakeChrome {
 	t.Helper()
-	f := &fakeChrome{replies: map[string]any{}, fail: map[string]string{}}
+	f := &fakeChrome{replies: map[string]any{}, fail: map[string]string{}, dom: map[string]json.RawMessage{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/json/list", func(w http.ResponseWriter, r *http.Request) {
 		ws := "ws" + strings.TrimPrefix(f.server.URL, "http") + "/devtools/page/1"
@@ -65,6 +78,14 @@ func newFakeChrome(t *testing.T) *fakeChrome {
 			}
 			// Interleave an unsolicited event to prove the client skips it.
 			_ = websocket.JSON.Send(c, map[string]any{"method": "Page.loadEventFired"})
+
+			if strings.HasPrefix(req.Method, "DOM.") {
+				f.mu.Lock()
+				raw := f.dom[req.Method]
+				f.mu.Unlock()
+				_ = websocket.JSON.Send(c, map[string]any{"id": req.ID, "result": raw})
+				continue
+			}
 
 			expr, _ := req.Params["expression"].(string)
 			value, msg, bad := f.reply(expr)
