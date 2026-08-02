@@ -54,12 +54,15 @@ Skills repository: [github.com/tamtom/gplay-cli-skills](https://github.com/tamto
 
 ## Console-only publish gates (web session)
 
-A few Play Console capabilities have no official API: listing every app, creating apps, changing App category, setting country availability, setting a paid app's price, and sending changes for review. The `gplay web apps` commands cover them by driving the console UI in a managed Chrome, using the browser session from `gplay web auth login` (separate from service-account auth):
+A few Play Console capabilities have no official API. The `gplay web apps` commands cover them by driving the console UI in a managed Chrome, using the browser session from `gplay web auth login` (separate from service-account auth):
 
 - `gplay web apps status --package <id>` — read-only readiness: setup checklist with pending tasks, pending changes, `canSendForReview` and the console's own blocked reason
 - `gplay web apps availability --package <id> [--track <id>] --countries "<a,b>" --confirm` — exact-match country targeting per track (`production` or a numeric track ID)
 - `gplay web apps pricing --package <id> --price <amount> --confirm` — set a paid app's price in the merchant home currency
 - `gplay web apps review --package <id> --confirm` — send pending changes for review
+- `gplay web apps distribution --package <id> [--add "Android TV" --confirm]` — read or add exact-match form-factor opt-ins; legal review steps stay in Play Console
+- `gplay web apps promo-codes --package <id> [--create ... --confirm]` — list campaigns or create generated paid-app codes; Terms acceptance stays in Play Console
+- `gplay web apps rating --package <id>` — read the submitted IARC result, regional ratings, and unfinished draft state
 
 These write commands verify the form before saving and re-read after saving, and they still need user confirmation like any outward action.
 

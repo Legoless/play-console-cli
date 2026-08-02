@@ -361,3 +361,156 @@ func TestWebAppsDeclarations_ImportsDataSafetyCSV(t *testing.T) {
 		t.Errorf("output = %s, want changed", stdout)
 	}
 }
+
+// --- distribution ---
+
+func TestWebAppsDistribution_ValidatesFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "package", args: []string{"--add", "Android TV", "--confirm"}, want: "--package"},
+		{name: "confirm", args: availabilityArgs("--add", "Android TV"), want: "--confirm"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := WebAppsDistributionCommand()
+			if err := cmd.FlagSet.Parse(tt.args); err != nil {
+				t.Fatal(err)
+			}
+			err := cmd.Exec(context.Background(), nil)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestWebAppsDistribution_ReadsFactors(t *testing.T) {
+	f := &fakePublishBrowser{
+		distribution: []*webdriver.DistributionState{{
+			FormFactors: []string{"Android XR"},
+			Tasks:       []string{"Upload Android TV screenshots for all store listings"},
+		}},
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDistributionCommand()
+	if err := cmd.FlagSet.Parse(availabilityArgs()); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("distribution: %v", err)
+	}
+	if !strings.Contains(stdout, "Android XR") || !strings.Contains(stdout, "screenshots") {
+		t.Errorf("output = %s", stdout)
+	}
+}
+
+func TestWebAppsDistribution_AddsFactor(t *testing.T) {
+	f := &fakePublishBrowser{
+		distribution: []*webdriver.DistributionState{
+			{FormFactors: []string{"Android XR"}},
+			{FormFactors: []string{"Android XR", "Android TV"}},
+		},
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDistributionCommand()
+	if err := cmd.FlagSet.Parse(availabilityArgs("--add", "Android TV", "--confirm")); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("distribution add: %v", err)
+	}
+	if f.addedFactor != "Android TV" {
+		t.Errorf("added = %q", f.addedFactor)
+	}
+	if !strings.Contains(stdout, `"changed":true`) || !strings.Contains(stdout, `"added":"Android TV"`) {
+		t.Errorf("output = %s", stdout)
+	}
+}
+
+func TestWebAppsDistribution_AddErrorsWhenFactorIsAbsentAfterReread(t *testing.T) {
+	f := &fakePublishBrowser{
+		distribution: []*webdriver.DistributionState{
+			{FormFactors: []string{"Android XR"}},
+			{FormFactors: []string{"Android XR"}},
+		},
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDistributionCommand()
+	if err := cmd.FlagSet.Parse(availabilityArgs("--add", "Android TV", "--confirm")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err == nil || !strings.Contains(err.Error(), "does not appear after adding") {
+		t.Errorf("err = %v, want verification error", err)
+	}
+}
+
+func TestWebAppsDistribution_AddDoesNotTreatTaskTextAsFactorVerification(t *testing.T) {
+	f := &fakePublishBrowser{
+		distribution: []*webdriver.DistributionState{
+			{FormFactors: []string{"Android XR"}},
+			{
+				FormFactors: []string{"Android XR"},
+				Tasks:       []string{"Upload Android TV screenshots for all store listings"},
+			},
+		},
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDistributionCommand()
+	if err := cmd.FlagSet.Parse(availabilityArgs("--add", "Android TV", "--confirm")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err == nil || !strings.Contains(err.Error(), "does not appear after adding") {
+		t.Errorf("err = %v, want verification error", err)
+	}
+}
+
+func TestWebAppsDistribution_AddRequiresExactFactorMatch(t *testing.T) {
+	f := &fakePublishBrowser{
+		distribution: []*webdriver.DistributionState{
+			{FormFactors: []string{"Android XR"}},
+			{FormFactors: []string{"Android XR", "Android Automotive OS"}},
+		},
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDistributionCommand()
+	if err := cmd.FlagSet.Parse(availabilityArgs("--add", "Android Auto", "--confirm")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err == nil || !strings.Contains(err.Error(), "does not appear after adding") {
+		t.Errorf("err = %v, want verification error", err)
+	}
+}
+
+func TestWebAppsDistribution_AddIsNoOpWhenExactFactorAlreadyPresent(t *testing.T) {
+	f := &fakePublishBrowser{
+		distribution: []*webdriver.DistributionState{{
+			FormFactors: []string{"Android XR", "Android TV"},
+		}},
+	}
+	setupPublish(t, f)
+
+	cmd := WebAppsDistributionCommand()
+	if err := cmd.FlagSet.Parse(availabilityArgs("--add", "android tv", "--confirm")); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error { return cmd.Exec(context.Background(), nil) })
+	if err != nil {
+		t.Fatalf("distribution add: %v", err)
+	}
+	if f.addedFactor != "" || !strings.Contains(stdout, `"changed":false`) || strings.Contains(stdout, `"added"`) {
+		t.Errorf("added = %q, output = %s; want unchanged no-op", f.addedFactor, stdout)
+	}
+}

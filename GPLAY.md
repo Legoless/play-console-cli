@@ -335,6 +335,9 @@
 - [web apps declarations](#web-apps-declarations)
 - [web apps policy](#web-apps-policy)
 - [web apps publish](#web-apps-publish)
+- [web apps distribution](#web-apps-distribution)
+- [web apps promo-codes](#web-apps-promo-codes)
+- [web apps rating](#web-apps-rating)
 - [update](#update)
 - [completion](#completion)
 - [completion bash](#completion-bash)
@@ -7718,12 +7721,13 @@ Manage apps through a Play Console web session.
 gplay web apps <subcommand> [flags]
 ```
 
-Manage apps through Play Console's internal web APIs.
+Manage apps through a Play Console browser session.
 
 These commands use the browser-session auth from "gplay web auth login" for
 Play Console capabilities that the official Android Publisher API does not
 provide, including listing and creating apps, changing App category, setting
-country availability, and sending changes for review.
+country availability, managing form-factor distribution and promo codes, and
+reading content-rating state.
 
 ---
 
@@ -8142,6 +8146,110 @@ Examples:
 | `--confirm` | Confirm publishing / the managed publishing change | `false` |
 | `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
 | `--managed` | Set managed publishing: on or off | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps distribution
+
+Read or add app form factors (Android TV, Wear OS, and more).
+
+```
+gplay web apps distribution --package <id> [--add "<factor>" --confirm]
+```
+
+Read the app's form factors, or add one.
+
+Without --add this lists the managed form factors and any outstanding
+per-factor requirements (screenshots, opt-ins). Adding requires --confirm;
+the factor list is re-read to verify. Product-policy opt-ins and other
+requirements reported in "tasks" remain explicit follow-up work.
+
+Available factors depend on the app; the menu typically offers Android TV,
+Wear OS, Android Automotive OS, Android Auto, and Google Play Games on PC.
+
+This drives the console's Advanced settings because the official Android
+Publisher API has no form-factor endpoints. Always confirm with the user.
+
+Examples:
+  gplay web apps distribution --package com.example.app
+  gplay web apps distribution --package com.example.app --add "Android TV" --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--add` | Form factor to add, e.g. "Android TV" or "Wear OS" | `` |
+| `--confirm` | Confirm adding the form factor | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+
+---
+
+## gplay web apps promo-codes
+
+List promo-code campaigns or create paid-app codes.
+
+```
+gplay web apps promo-codes --package <id> [--create --name <name> --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD> --code-count <n> --confirm]
+```
+
+List promo-code campaigns, or create generated one-time-use codes for a paid app.
+
+Creation currently covers the paid-app reward, whose Console form has stable,
+verified controls. One-time products, subscriptions, custom codes, campaign
+updates, and downloads remain in Play Console.
+
+The promotion may last at most one year and can generate at most 500 codes.
+Dates are interpreted in GMT. Promo codes Terms of Service must be reviewed
+and accepted manually in Play Console; this command never accepts them.
+
+Examples:
+  gplay web apps promo-codes --package com.example.app
+  gplay web apps promo-codes --package com.example.app --create --name Launch \
+    --start-date 2026-08-02 --end-date 2026-08-31 --code-count 100 --confirm
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--code-count` | Number of codes to generate (1-500) | `0` |
+| `--confirm` | Confirm promo-code creation | `false` |
+| `--create` | Create generated one-time codes for the paid app | `false` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
+| `--end-date` | Promotion end date in GMT (YYYY-MM-DD) | `` |
+| `--name` | Promotion name (maximum 60 characters) | `` |
+| `--output` | Output format: json (default), table, markdown | `json` |
+| `--package` | Package name (applicationId) | `` |
+| `--pretty` | Pretty-print JSON output | `false` |
+| `--start-date` | Promotion start date in GMT (YYYY-MM-DD) | `` |
+
+---
+
+## gplay web apps rating
+
+Read the app's IARC content-rating state.
+
+```
+gplay web apps rating --package <id>
+```
+
+Read the submitted IARC content rating, contact email, certificate,
+regional ratings, and any unfinished questionnaire draft.
+
+Read-only. IARC submission is intentionally left in Play Console: its dynamic
+questionnaire requires app-specific factual answers and explicit acceptance
+of IARC's Terms of Use.
+
+Example:
+  gplay web apps rating --package com.example.app
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--account` | Web session account email (default: last used session) | `` |
+| `--developer` | Developer account ID (numeric; default: auto-discover) | `` |
 | `--output` | Output format: json (default), table, markdown | `json` |
 | `--package` | Package name (applicationId) | `` |
 | `--pretty` | Pretty-print JSON output | `false` |

@@ -22,6 +22,8 @@ type fakePublishBrowser struct {
 	review        *webdriver.ReviewState
 	declarations  *webdriver.DeclarationsState
 	policy        *webdriver.PolicyStatus
+	distribution  []*webdriver.DistributionState
+	addedFactor   string
 	questSteps    []webdriver.QuestionnaireStep
 	questHasNext  bool
 	setChoices    [][]string
@@ -311,6 +313,26 @@ func (f *fakePublishBrowser) QuestionnaireDiscard(context.Context) error {
 	return nil
 }
 
+func (f *fakePublishBrowser) ReadDistribution(_ context.Context, developerID, appID, account string) (*webdriver.DistributionState, error) {
+	f.steps = append(f.steps, "read-distribution")
+	f.developerID, f.appID, f.account = developerID, appID, account
+	if len(f.distribution) == 0 {
+		return nil, errors.New("no fake distribution state")
+	}
+	state := f.distribution[0]
+	f.distribution = f.distribution[1:]
+	return state, nil
+}
+
+func (f *fakePublishBrowser) AddFormFactor(_ context.Context, factor string) error {
+	f.steps = append(f.steps, "add-factor")
+	f.addedFactor = factor
+	if f.failAt == "add-factor" {
+		return errors.New("add factor failed")
+	}
+	return nil
+}
+
 func (f *fakePublishBrowser) ImportDataSafetyCSV(_ context.Context, developerID, appID, account, filePath string) error {
 	f.steps = append(f.steps, "import-csv")
 	f.importedCSV = filePath
@@ -359,8 +381,10 @@ func TestWebAppsStatus_ReportsSetupAndPublishing(t *testing.T) {
 		setup: &webdriver.AppSetup{
 			AppState: "draft",
 			Goals: []webdriver.SetupGoal{
-				{ID: "prod-goal", Title: "Create and publish a release", Complete: 1, Total: 5,
-					PendingTasks: []string{"Select countries and regions"}},
+				{
+					ID: "prod-goal", Title: "Create and publish a release", Complete: 1, Total: 5,
+					PendingTasks: []string{"Select countries and regions"},
+				},
 			},
 		},
 		overviews: []*webdriver.PublishingOverview{{
@@ -764,6 +788,7 @@ func TestWebAppsReview_VerifiesSent(t *testing.T) {
 		t.Errorf("err = %v, want post-send verification error", err)
 	}
 }
+
 // --- pricing ---
 
 func pricingArgs(extra ...string) []string {

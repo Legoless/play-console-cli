@@ -16,11 +16,11 @@ import (
 
 // declarationsResult is the `web apps declarations` output.
 type declarationsResult struct {
-	PackageName string                    `json:"packageName"`
+	PackageName  string                       `json:"packageName"`
 	Declarations *webdriver.DeclarationsState `json:"declarations,omitempty"`
-	Changed     bool                      `json:"changed"`
-	Set         string                    `json:"set,omitempty"`
-	Value       string                    `json:"value,omitempty"`
+	Changed      bool                         `json:"changed"`
+	Set          string                       `json:"set,omitempty"`
+	Value        string                       `json:"value,omitempty"`
 }
 
 // settableRadioDeclarations maps --set keys to console app-content routes.

@@ -148,6 +148,35 @@ func TestListApps(t *testing.T) {
 	_ = gotPath
 }
 
+func TestPromoCodesTermsAccepted(t *testing.T) {
+	t.Setenv(appsAPIKeyEnv, "test-key")
+	for _, tt := range []struct {
+		name    string
+		payload string
+		want    bool
+	}{
+		{name: "current version accepted", payload: `{"7":[{"1":9,"2":1,"3":1}]}`, want: true},
+		{name: "older version accepted", payload: `{"7":[{"1":9,"2":1,"3":2}]}`},
+		{name: "status missing", payload: `{}`},
+		{name: "versions missing", payload: `{"7":[{"1":9}]}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
+				"GET /v1/developers/dev1/developersummaries": func(w http.ResponseWriter, _ *http.Request) {
+					fmt.Fprint(w, tt.payload)
+				},
+			})
+			got, err := NewWithClient(testSession(), nil, mock.BaseURL()).PromoCodesTermsAccepted(context.Background(), "dev1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("accepted = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestListApps_MissingAPIKeyIsActionable(t *testing.T) {
 	t.Setenv(appsAPIKeyEnv, "")
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{

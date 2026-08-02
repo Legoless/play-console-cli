@@ -111,7 +111,9 @@ func shortenPricingTimeouts(t *testing.T) {
 	t.Helper()
 	origSettle, origStep, origDialog := pricingFormSettleTimeout, pricingStepSettle, pricingDialogSettle
 	pricingFormSettleTimeout, pricingStepSettle, pricingDialogSettle = 300*time.Millisecond, 0, 0
-	t.Cleanup(func() { pricingFormSettleTimeout, pricingStepSettle, pricingDialogSettle = origSettle, origStep, origDialog })
+	t.Cleanup(func() {
+		pricingFormSettleTimeout, pricingStepSettle, pricingDialogSettle = origSettle, origStep, origDialog
+	})
 }
 
 func TestSetAppPrice_ErrorsWhenInputNotFocusable(t *testing.T) {

@@ -27,6 +27,9 @@ const appsAPIKeyEnv = "GPLAY_WEB_API_KEY"
 // forever.
 const maxAppPages = 100
 
+// promoCodesPolicyTOSType is TOS_TYPE_PROMOTION_CODES_POLICY in the Console API.
+const promoCodesPolicyTOSType = 9
+
 // App is one entry of the Play Console app list.
 type App struct {
 	AppID       string `json:"appId"`
@@ -108,6 +111,42 @@ func (c *Client) ListApps(ctx context.Context, developerID string) ([]App, error
 		pageToken = next
 	}
 	return apps, nil
+}
+
+// PromoCodesTermsAccepted reports whether the developer accepted the latest
+// promo-code policy. Missing or malformed version data is never treated as
+// acceptance.
+func (c *Client) PromoCodesTermsAccepted(ctx context.Context, developerID string) (bool, error) {
+	developerID = strings.TrimSpace(developerID)
+	if developerID == "" {
+		return false, errors.New("developer ID is required")
+	}
+	endpoint := c.appsBaseURL + "/v1/developers/" + url.PathEscape(developerID) + "/developersummaries"
+	req, err := c.apiRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return false, err
+	}
+	body, err := c.doAPI(req, "checking promo-code Terms acceptance")
+	if err != nil {
+		return false, err
+	}
+	var wire struct {
+		Statuses []struct {
+			Type            int  `json:"1"`
+			AcceptedVersion *int `json:"2"`
+			LatestVersion   *int `json:"3"`
+		} `json:"7"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		return false, fmt.Errorf("parsing developer Terms response: %w", err)
+	}
+	for _, status := range wire.Statuses {
+		if status.Type != promoCodesPolicyTOSType || status.AcceptedVersion == nil || status.LatestVersion == nil {
+			continue
+		}
+		return *status.LatestVersion > 0 && *status.AcceptedVersion >= *status.LatestVersion, nil
+	}
+	return false, nil
 }
 
 // listAppsPage fetches one page of app summaries.

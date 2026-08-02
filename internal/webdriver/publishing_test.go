@@ -143,10 +143,14 @@ func TestReadAppSetup(t *testing.T) {
 	f.setReply(readAppSetupScript, map[string]any{
 		"appState": "draft",
 		"goals": []map[string]any{
-			{"id": "basic-info-goal", "title": "Set up your app", "complete": 12, "total": 13,
-				"pendingTasks": []string{"Set the price of your app"}},
-			{"id": "prod-goal", "title": "Create and publish a release", "complete": 1, "total": 5,
-				"pendingTasks": []string{"Select countries and regions", "Create a new release"}},
+			{
+				"id": "basic-info-goal", "title": "Set up your app", "complete": 12, "total": 13,
+				"pendingTasks": []string{"Set the price of your app"},
+			},
+			{
+				"id": "prod-goal", "title": "Create and publish a release", "complete": 1, "total": 5,
+				"pendingTasks": []string{"Select countries and regions", "Create a new release"},
+			},
 		},
 	})
 	b := connectFake(t, f)

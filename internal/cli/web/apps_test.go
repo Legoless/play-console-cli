@@ -80,7 +80,7 @@ func TestWebAppsCommands_RegisteredInGroup(t *testing.T) {
 	for _, sub := range WebAppsCommand().Subcommands {
 		names = append(names, sub.Name)
 	}
-	for _, want := range []string{"list", "create", "update", "status", "availability", "pricing", "review", "rollout", "declarations", "policy", "publish"} {
+	for _, want := range []string{"list", "create", "update", "status", "availability", "pricing", "review", "rollout", "declarations", "policy", "publish", "distribution", "promo-codes", "rating"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("web apps subcommands = %v, want %q", names, want)
 		}
@@ -240,8 +240,10 @@ func TestWebAppsCreate_RequiresDeclarations(t *testing.T) {
 func TestWebAppsCreate_RequiresConfirm(t *testing.T) {
 	useTempSessionDir(t)
 	cmd := WebAppsCreateCommand()
-	args := []string{"--name", "M", "--package", "com.x", "--kind", "app", "--pricing", "free",
-		"--accept-policies", "--accept-us-export-laws"}
+	args := []string{
+		"--name", "M", "--package", "com.x", "--kind", "app", "--pricing", "free",
+		"--accept-policies", "--accept-us-export-laws",
+	}
 	if err := cmd.FlagSet.Parse(args); err != nil {
 		t.Fatal(err)
 	}
@@ -266,8 +268,10 @@ func TestWebAppsCreate_DryRunSkipsNetwork(t *testing.T) {
 func TestWebAppsCreate_ValidatesPackageName(t *testing.T) {
 	useTempSessionDir(t)
 	cmd := WebAppsCreateCommand()
-	if err := cmd.FlagSet.Parse([]string{"--name", "M", "--kind", "app", "--pricing", "free",
-		"--accept-policies", "--accept-us-export-laws", "--confirm"}); err != nil {
+	if err := cmd.FlagSet.Parse([]string{
+		"--name", "M", "--kind", "app", "--pricing", "free",
+		"--accept-policies", "--accept-us-export-laws", "--confirm",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	err := cmd.Exec(context.Background(), nil)

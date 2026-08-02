@@ -53,6 +53,9 @@ gplay web apps rollout          # Roll out the production draft release: preview
 gplay web apps declarations     # Read/set App content declarations (privacy URL, radios, questionnaires, CSV import)
 gplay web apps policy           # Read Play policy status and reported issues
 gplay web apps publish          # Publish approved changes; toggle managed publishing
+gplay web apps distribution     # Read or add form-factor distribution opt-ins
+gplay web apps promo-codes      # List campaigns or create paid-app promo codes
+gplay web apps rating           # Read submitted IARC ratings and draft state
 gplay listings locales          # List available locales with validation
 gplay release-notes generate    # Generate release notes from git history
 ```

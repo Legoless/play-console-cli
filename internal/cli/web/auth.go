@@ -25,6 +25,7 @@ const playOrigin = "https://play.google.com/"
 type webRPCClient interface {
 	DiscoverDeveloperID(ctx context.Context) (string, error)
 	ListApps(ctx context.Context, developerID string) ([]webclient.App, error)
+	PromoCodesTermsAccepted(ctx context.Context, developerID string) (bool, error)
 	CheckPackageName(ctx context.Context, developerID, packageName string) (webclient.PackageAvailability, error)
 	CreateApp(ctx context.Context, req webclient.CreateAppRequest) (*webclient.App, error)
 }

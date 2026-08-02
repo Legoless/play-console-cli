@@ -47,6 +47,8 @@ type publishBrowser interface {
 	QuestionnaireNext(ctx context.Context) (bool, error)
 	QuestionnaireSave(ctx context.Context, timeout time.Duration) error
 	QuestionnaireDiscard(ctx context.Context) error
+	ReadDistribution(ctx context.Context, developerID, appID, account string) (*webdriver.DistributionState, error)
+	AddFormFactor(ctx context.Context, factor string) error
 	ImportDataSafetyCSV(ctx context.Context, developerID, appID, account, filePath string) error
 	ReadPolicyStatus(ctx context.Context, developerID, appID, account string) (*webdriver.PolicyStatus, error)
 	SetManagedPublishing(ctx context.Context, developerID, appID, account string, on bool) error
@@ -59,96 +61,135 @@ type browserPublish struct{ b *webdriver.Browser }
 func (p browserPublish) ReadOverview(ctx context.Context, developerID, appID, account string) (*webdriver.PublishingOverview, error) {
 	return webdriver.ReadPublishingOverview(ctx, p.b, developerID, appID, account)
 }
+
 func (p browserPublish) ReadSetup(ctx context.Context, developerID, appID, account string) (*webdriver.AppSetup, error) {
 	return webdriver.ReadAppSetup(ctx, p.b, developerID, appID, account)
 }
+
 func (p browserPublish) SendForReview(ctx context.Context, timeout time.Duration) error {
 	return webdriver.SendForReview(ctx, p.b, timeout)
 }
+
 func (p browserPublish) OpenCountries(ctx context.Context, developerID, appID, account, track string) error {
 	return webdriver.OpenCountriesEditor(ctx, p.b, developerID, appID, account, track)
 }
+
 func (p browserPublish) ReadCountries(ctx context.Context) (*webdriver.CountriesState, error) {
 	return webdriver.ReadCountries(ctx, p.b)
 }
+
 func (p browserPublish) SetCountries(ctx context.Context, names []string) error {
 	return webdriver.SetCountries(ctx, p.b, names)
 }
+
 func (p browserPublish) UnsetCountries(ctx context.Context, names []string) error {
 	return webdriver.UnsetCountries(ctx, p.b, names)
 }
+
 func (p browserPublish) SetAllCountries(ctx context.Context) error {
 	return webdriver.SetAllCountries(ctx, p.b)
 }
+
 func (p browserPublish) SubmitCountries(ctx context.Context, timeout time.Duration) error {
 	return webdriver.SubmitCountries(ctx, p.b, timeout)
 }
+
 func (p browserPublish) DiscardCountries(ctx context.Context) error {
 	return webdriver.DiscardCountries(ctx, p.b)
 }
+
 func (p browserPublish) OpenPricing(ctx context.Context, developerID, appID, account string) error {
 	return webdriver.OpenAppPricing(ctx, p.b, developerID, appID, account)
 }
+
 func (p browserPublish) ReadPricing(ctx context.Context) (*webdriver.AppPricingState, error) {
 	return webdriver.ReadAppPricing(ctx, p.b)
 }
+
 func (p browserPublish) SetPrice(ctx context.Context, price string) error {
 	return webdriver.SetAppPrice(ctx, p.b, price)
 }
+
 func (p browserPublish) SubmitPricing(ctx context.Context, timeout time.Duration) error {
 	return webdriver.SubmitAppPricing(ctx, p.b, timeout)
 }
+
 func (p browserPublish) DiscardPricing(ctx context.Context) error {
 	return webdriver.DiscardAppPricing(ctx, p.b)
 }
+
 func (p browserPublish) OpenProductionReleases(ctx context.Context, developerID, appID, account string) error {
 	return webdriver.OpenProductionReleases(ctx, p.b, developerID, appID, account)
 }
+
 func (p browserPublish) OpenDraftRelease(ctx context.Context) (*webdriver.PrepareState, error) {
 	return webdriver.OpenDraftRelease(ctx, p.b)
 }
+
 func (p browserPublish) ReviewDraftRelease(ctx context.Context) (*webdriver.ReviewState, error) {
 	return webdriver.ReviewDraftRelease(ctx, p.b)
 }
+
 func (p browserPublish) SaveReleaseReview(ctx context.Context, timeout time.Duration) error {
 	return webdriver.SaveReleaseReview(ctx, p.b, timeout)
 }
+
 func (p browserPublish) ReadDeclarations(ctx context.Context, developerID, appID, account string) (*webdriver.DeclarationsState, error) {
 	return webdriver.ReadDeclarations(ctx, p.b, developerID, appID, account)
 }
+
 func (p browserPublish) SetPrivacyPolicyURL(ctx context.Context, developerID, appID, account, url string) (bool, error) {
 	return webdriver.SetPrivacyPolicyURL(ctx, p.b, developerID, appID, account, url)
 }
+
 func (p browserPublish) SetRadioDeclaration(ctx context.Context, developerID, appID, account, page string, yes bool) (bool, error) {
 	return webdriver.SetRadioDeclaration(ctx, p.b, developerID, appID, account, page, yes)
 }
+
 func (p browserPublish) OpenQuestionnaire(ctx context.Context, developerID, appID, account, page string) error {
 	return webdriver.OpenQuestionnaire(ctx, p.b, developerID, appID, account, page)
 }
+
 func (p browserPublish) ReadQuestionnaireStep(ctx context.Context) (*webdriver.QuestionnaireStep, error) {
 	return webdriver.ReadQuestionnaireStep(ctx, p.b)
 }
+
 func (p browserPublish) SetStepChoices(ctx context.Context, ids []string) error {
 	return webdriver.SetStepChoices(ctx, p.b, ids)
 }
+
 func (p browserPublish) QuestionnaireNext(ctx context.Context) (bool, error) {
 	return webdriver.QuestionnaireNext(ctx, p.b)
 }
+
 func (p browserPublish) QuestionnaireSave(ctx context.Context, timeout time.Duration) error {
 	return webdriver.QuestionnaireSave(ctx, p.b, timeout)
 }
+
 func (p browserPublish) QuestionnaireDiscard(ctx context.Context) error {
 	return webdriver.QuestionnaireDiscard(ctx, p.b)
 }
+
+func (p browserPublish) ReadDistribution(ctx context.Context, developerID, appID, account string) (*webdriver.DistributionState, error) {
+	return webdriver.ReadDistribution(ctx, p.b, developerID, appID, account)
+}
+
+func (p browserPublish) AddFormFactor(ctx context.Context, factor string) error {
+	return webdriver.AddFormFactor(ctx, p.b, factor)
+}
+
 func (p browserPublish) ImportDataSafetyCSV(ctx context.Context, developerID, appID, account, filePath string) error {
 	return webdriver.ImportDataSafetyCSV(ctx, p.b, developerID, appID, account, filePath)
 }
+
 func (p browserPublish) ReadPolicyStatus(ctx context.Context, developerID, appID, account string) (*webdriver.PolicyStatus, error) {
 	return webdriver.ReadPolicyStatus(ctx, p.b, developerID, appID, account)
 }
+
 func (p browserPublish) SetManagedPublishing(ctx context.Context, developerID, appID, account string, on bool) error {
 	return webdriver.SetManagedPublishing(ctx, p.b, developerID, appID, account, on)
 }
+
 func (p browserPublish) PublishApprovedChanges(ctx context.Context, developerID, appID, account string, timeout time.Duration) error {
 	return webdriver.PublishApprovedChanges(ctx, p.b, developerID, appID, account, timeout)
 }

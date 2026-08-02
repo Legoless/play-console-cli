@@ -22,11 +22,12 @@ type fakeChrome struct {
 	server *httptest.Server
 	// mu guards the scripted tables: the websocket handler runs on its own
 	// goroutine while tests mutate replies mid-flight.
-	mu      sync.Mutex
-	replies map[string]any // expression -> value returned
-	fail    map[string]string
-	dom     map[string]json.RawMessage // DOM.* method -> result payload
-	seen    []string
+	mu           sync.Mutex
+	replies      map[string]any // expression -> value returned
+	defaultReply any
+	fail         map[string]string
+	dom          map[string]json.RawMessage // DOM.* method -> result payload
+	seen         []string
 }
 
 // reply records/returns the scripted answer for an expression.
@@ -37,7 +38,11 @@ func (f *fakeChrome) reply(expr string) (any, string, bool) {
 	if msg, bad := f.fail[expr]; bad {
 		return nil, msg, true
 	}
-	return f.replies[expr], "", false
+	value, ok := f.replies[expr]
+	if !ok {
+		value = f.defaultReply
+	}
+	return value, "", false
 }
 
 // setReply scripts an answer.

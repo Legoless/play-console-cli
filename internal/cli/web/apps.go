@@ -24,12 +24,13 @@ func WebAppsCommand() *ffcli.Command {
 		Name:       "apps",
 		ShortUsage: "gplay web apps <subcommand> [flags]",
 		ShortHelp:  "Manage apps through a Play Console web session.",
-		LongHelp: `Manage apps through Play Console's internal web APIs.
+		LongHelp: `Manage apps through a Play Console browser session.
 
 These commands use the browser-session auth from "gplay web auth login" for
 Play Console capabilities that the official Android Publisher API does not
 provide, including listing and creating apps, changing App category, setting
-country availability, and sending changes for review.`,
+country availability, managing form-factor distribution and promo codes, and
+reading content-rating state.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -44,6 +45,9 @@ country availability, and sending changes for review.`,
 			WebAppsDeclarationsCommand(),
 			WebAppsPolicyCommand(),
 			WebAppsPublishCommand(),
+			WebAppsDistributionCommand(),
+			WebAppsPromoCodesCommand(),
+			WebAppsRatingCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -158,9 +162,11 @@ type browserCreator struct{ b *webdriver.Browser }
 func (c browserCreator) Fill(ctx context.Context, developerID string, form webdriver.AppForm) error {
 	return webdriver.FillAppForm(ctx, c.b, developerID, form)
 }
+
 func (c browserCreator) Read(ctx context.Context) (*webdriver.FormState, error) {
 	return webdriver.ReadForm(ctx, c.b)
 }
+
 func (c browserCreator) Submit(ctx context.Context, timeout time.Duration) (string, error) {
 	return webdriver.SubmitAppForm(ctx, c.b, timeout)
 }
@@ -399,12 +405,15 @@ type browserUpdater struct{ b *webdriver.Browser }
 func (u browserUpdater) Open(ctx context.Context, developerID, appID, account string) error {
 	return webdriver.OpenAppSettings(ctx, u.b, developerID, appID, account)
 }
+
 func (u browserUpdater) Read(ctx context.Context) (*webdriver.AppSettingsState, error) {
 	return webdriver.ReadAppSettings(ctx, u.b)
 }
+
 func (u browserUpdater) SetClassification(ctx context.Context, kind, category string) error {
 	return webdriver.SetAppClassification(ctx, u.b, kind, category)
 }
+
 func (u browserUpdater) Submit(ctx context.Context, timeout time.Duration) error {
 	return webdriver.SubmitAppSettings(ctx, u.b, timeout)
 }
