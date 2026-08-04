@@ -220,8 +220,18 @@ func AuthStatusCommand() *ffcli.Command {
 		Name:       "status",
 		ShortUsage: "gplay web auth status [--check]",
 		ShortHelp:  "List stored web sessions and optionally validate them.",
-		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		LongHelp: `List the stored Play Console web sessions, sorted by account email.
+
+Each entry reports the account email, when the session file was last written,
+and its path. Cookies are never printed. With --check, every session is used
+against the real Play Console and reported as "valid" or "expired"; this costs
+one request per session, so it is off by default.
+
+Examples:
+  gplay web auth status
+  gplay web auth status --check --output table`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if err := shared.ValidateOutputFlags(*outputFlag, *pretty); err != nil {
 				return err
@@ -275,8 +285,22 @@ func AuthLogoutCommand() *ffcli.Command {
 		Name:       "logout",
 		ShortUsage: "gplay web auth logout [--account <email> | --all] --confirm",
 		ShortHelp:  "Delete stored web sessions.",
-		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		LongHelp: `Delete stored Play Console web sessions.
+
+Without --account the last used session is removed; --all removes every stored
+session. --confirm is required either way.
+
+This only deletes gplay's saved cookies. The Chrome profile created by
+"gplay web auth login --browser" stays signed in under ~/.gplay/web/browser, so
+a later "login --browser" restores a session without any interaction. Delete
+that directory too for a full sign-out.
+
+Examples:
+  gplay web auth logout --confirm
+  gplay web auth logout --account me@example.com --confirm
+  gplay web auth logout --all --confirm`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if err := shared.ValidateOutputFlags(*outputFlag, *pretty); err != nil {
 				return err
@@ -339,8 +363,8 @@ func browserLogin(ctx context.Context, email string, timeout time.Duration) (*we
 	if err := chromeLauncher(ctx, dir, consoleLoginURL); err != nil {
 		return nil, nil, "", err
 	}
-	fmt.Fprintf(os.Stderr, "Opened a gplay-controlled Chrome window; sign in as %s.\n", email) // #nosec G705 -- stderr log
-	fmt.Fprintf(os.Stderr, "Profile: %s (kept signed in, so this is a one-time step)\n", dir)  // #nosec G705 -- stderr log
+	fmt.Fprintf(os.Stderr, "Opened a gplay-controlled Chrome window; sign in as %s.\n", email)
+	fmt.Fprintf(os.Stderr, "Profile: %s (kept signed in, so this is a one-time step)\n", dir)
 
 	deadline := time.Now().Add(timeout)
 	for {

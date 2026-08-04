@@ -138,7 +138,7 @@ func ReadPromotions(ctx context.Context, b *Browser, developerID, appID, account
 		return nil, err
 	}
 	if err := b.EvalUntil(ctx, promotionsReadyExpr(), 60*time.Second); err != nil {
-		return nil, fmt.Errorf("Promo codes page did not load (is the gplay browser profile signed in?): %w", err)
+		return nil, fmt.Errorf("the Promo codes page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var state PromotionsState
 	if err := b.Eval(ctx, readPromotionsScript, &state); err != nil {
@@ -288,13 +288,13 @@ func CreatePaidAppPromotion(ctx context.Context, b *Browser, developerID, appID,
 		return nil, fmt.Errorf("invalid paid-app promotion form")
 	}
 	if !termsAccepted {
-		return nil, fmt.Errorf("Promo codes Terms of Service must be reviewed and accepted manually in Play Console; no promotion was created")
+		return nil, fmt.Errorf("the Promo codes Terms of Service must be reviewed and accepted manually in Play Console; no promotion was created")
 	}
 	if err := b.Navigate(ctx, promotionCreateURL(developerID, appID, account)); err != nil {
 		return nil, err
 	}
 	if err := b.EvalUntil(ctx, promotionCreateReadyExpr(), 60*time.Second); err != nil {
-		return nil, fmt.Errorf("Create promo code form did not load (is the gplay browser profile signed in?): %w", err)
+		return nil, fmt.Errorf("the Create promo code form did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	// A visible modal vetoes the positive API check in case Google published a
 	// newer policy between the check and this form load. Never click Accept.
@@ -303,7 +303,7 @@ func CreatePaidAppPromotion(ctx context.Context, b *Browser, developerID, appID,
 		return nil, err
 	}
 	if terms {
-		return nil, fmt.Errorf("Promo codes Terms of Service must be reviewed and accepted manually in Play Console; no promotion was created")
+		return nil, fmt.Errorf("the Promo codes Terms of Service must be reviewed and accepted manually in Play Console; no promotion was created")
 	}
 	if err := typePromotionInput(ctx, b, "name-input", form.Name); err != nil {
 		return nil, err
@@ -324,7 +324,7 @@ func CreatePaidAppPromotion(ctx context.Context, b *Browser, developerID, appID,
 		return nil, err
 	}
 	if !selected {
-		return nil, fmt.Errorf("Paid app promotion is unavailable for this app")
+		return nil, fmt.Errorf("paid app promotion is unavailable for this app")
 	}
 	if err := typePromotionInput(ctx, b, "codes-limit-input", strconv.Itoa(form.CodeCount)); err != nil {
 		return nil, err
@@ -337,7 +337,7 @@ func CreatePaidAppPromotion(ctx context.Context, b *Browser, developerID, appID,
 		return nil, err
 	}
 	if !clicked {
-		return nil, fmt.Errorf("Create promo code button was missing or disabled")
+		return nil, fmt.Errorf("the Create promo code button was missing or disabled")
 	}
 	if err := b.EvalUntil(ctx, promotionConfirmReadyScript, 15*time.Second); err != nil {
 		return nil, fmt.Errorf("promo-code confirmation did not open: %w", err)

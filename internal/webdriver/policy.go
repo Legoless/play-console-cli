@@ -24,6 +24,8 @@ type PolicyStatus struct {
 	Issues  []PolicyIssue `json:"issues"`
 }
 
+const policyStatusReadyScript = `!!document.querySelector('[debug-id=empty-state], [role=row]')`
+
 const readPolicyStatusScript = `(() => {
   const clean = s => (s || '').replace(/\s+/g, ' ').trim();
   const empty = document.querySelector('[debug-id=empty-state]');
@@ -49,9 +51,8 @@ func ReadPolicyStatus(ctx context.Context, b *Browser, developerID, appID, accou
 	if err := b.Navigate(ctx, policyCenterURL(developerID, appID, account)); err != nil {
 		return nil, err
 	}
-	ready := `!!document.querySelector('[debug-id=empty-state], [role=row]')`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("Policy status page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, policyStatusReadyScript, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the Policy status page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var status PolicyStatus
 	if err := b.Eval(ctx, readPolicyStatusScript, &status); err != nil {
@@ -59,6 +60,12 @@ func ReadPolicyStatus(ctx context.Context, b *Browser, developerID, appID, accou
 	}
 	return &status, nil
 }
+
+// managedPublishingReadyScript waits for the Publishing overview's
+// managed-publishing dropdown, the entry point for both the toggle and the
+// Publish action.
+const managedPublishingReadyScript = formHelpers + ` && ` + publishHelpers +
+	` && !!document.querySelector('[debug-id=managed-publishing-dropdown]')`
 
 // managedPublishingChoices clicks the managed-publishing dropdown and lists or
 // picks the on/off options.
@@ -102,9 +109,8 @@ func SetManagedPublishing(ctx context.Context, b *Browser, developerID, appID, a
 	if err := b.Navigate(ctx, publishingOverviewURL(developerID, appID, account)); err != nil {
 		return err
 	}
-	ready := formHelpers + ` && ` + publishHelpers + ` && !!document.querySelector('[debug-id=managed-publishing-dropdown]')`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return fmt.Errorf("Publishing overview did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, managedPublishingReadyScript, 60*time.Second); err != nil {
+		return fmt.Errorf("the Publishing overview did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var opened bool
 	if err := b.Eval(ctx, managedPublishingMenuScript, &opened); err != nil {
@@ -137,6 +143,11 @@ func SetManagedPublishing(ctx context.Context, b *Browser, developerID, appID, a
 	return nil
 }
 
+// publishSettledScript reports that the overview no longer offers a Publish
+// action, i.e. the click was accepted and the changes went live.
+const publishSettledScript = `(() => ![...document.querySelectorAll('button')].find(b =>
+  b.getClientRects().length && /^publish/i.test(b.textContent.trim())))()`
+
 const publishNowClickScript = `(() => {
   const btn = [...document.querySelectorAll('button')].find(b =>
     b.getClientRects().length && !b.disabled && /^publish/i.test(b.textContent.trim()));
@@ -155,9 +166,8 @@ func PublishApprovedChanges(ctx context.Context, b *Browser, developerID, appID,
 	if err := b.Navigate(ctx, publishingOverviewURL(developerID, appID, account)); err != nil {
 		return err
 	}
-	ready := formHelpers + ` && ` + publishHelpers + ` && !!document.querySelector('[debug-id=managed-publishing-dropdown]')`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return fmt.Errorf("Publishing overview did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, managedPublishingReadyScript, 60*time.Second); err != nil {
+		return fmt.Errorf("the Publishing overview did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var clicked bool
 	if err := b.Eval(ctx, publishNowClickScript, &clicked); err != nil {
@@ -174,9 +184,7 @@ func PublishApprovedChanges(ctx context.Context, b *Browser, developerID, appID,
 	if confirm == "no-button" {
 		return fmt.Errorf("the publish confirmation dialog has no recognizable confirm button; nothing was published")
 	}
-	settled := `(() => ![...document.querySelectorAll('button')].find(b =>
-	  b.getClientRects().length && /^publish/i.test(b.textContent.trim()))())()`
-	if err := b.EvalUntil(ctx, settled, timeout); err != nil {
+	if err := b.EvalUntil(ctx, publishSettledScript, timeout); err != nil {
 		return fmt.Errorf("publishing did not complete: %w", err)
 	}
 	return nil

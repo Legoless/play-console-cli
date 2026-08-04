@@ -71,6 +71,15 @@ const readAppPricingScript = `(() => {
   };
 })()`
 
+const pricingPageReadyScript = formHelpers + ` && ` + pricingHelpers +
+	` && !!window.__gplayPricing.setPricingButton()`
+
+// pricingStagedScript reports whether a pricing draft is currently staged;
+// pricingUnstagedScript is its negation, used to wait a discard out.
+const pricingStagedScript = formHelpers + ` && ` + pricingHelpers + ` && window.__gplayPricing.staged()`
+
+const pricingUnstagedScript = formHelpers + ` && ` + pricingHelpers + ` && !window.__gplayPricing.staged()`
+
 // OpenAppPricing opens the app's App pricing page. It changes nothing.
 func OpenAppPricing(ctx context.Context, b *Browser, developerID, appID, account string) error {
 	if strings.TrimSpace(developerID) == "" || strings.TrimSpace(appID) == "" {
@@ -79,9 +88,8 @@ func OpenAppPricing(ctx context.Context, b *Browser, developerID, appID, account
 	if err := b.Navigate(ctx, appPricingURL(developerID, appID, account)); err != nil {
 		return err
 	}
-	ready := formHelpers + ` && ` + pricingHelpers + ` && !!window.__gplayPricing.setPricingButton()`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return fmt.Errorf("App pricing page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, pricingPageReadyScript, 60*time.Second); err != nil {
+		return fmt.Errorf("the App pricing page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	return nil
 }
@@ -104,6 +112,21 @@ const setPricingClickScript = `(() => {
   if (!p.enabled(btn)) return false;
   btn.click();
   return true;
+})()`
+
+const pricingCountryTableReadyScript = `!!document.querySelector('mat-checkbox[aria-label="Select all rows"]')`
+
+// pricingSelectionCountedScript waits for the console's own "N countries /
+// regions selected" readout: the selection model lags the header checkbox, and
+// continuing early prices an empty set (proven against the live console).
+const pricingSelectionCountedScript = `(() => /\d+ countries \/ regions selected/i.test(document.body.innerText))()`
+
+// pricingWizardDoneScript is the wizard's success condition: a staged draft
+// with an enabled Save changes AND computed prices in the table. A submission
+// that lost the price fails this instead of looking successful.
+const pricingWizardDoneScript = formHelpers + ` && ` + pricingHelpers + ` && (() => {
+  const p = window.__gplayPricing;
+  return p.staged() && p.enabled(p.saveButton()) && p.pricesSet();
 })()`
 
 const pricingSelectAllScript = `(() => {
@@ -206,7 +229,7 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 	// A previously staged draft would blend into the verification below, so
 	// the wizard always starts from a clean slate.
 	var staged bool
-	if err := b.Eval(ctx, formHelpers+` && `+pricingHelpers+` && window.__gplayPricing.staged()`, &staged); err != nil {
+	if err := b.Eval(ctx, pricingStagedScript, &staged); err != nil {
 		return err
 	}
 	if staged {
@@ -227,7 +250,7 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 	if !clicked {
 		return fmt.Errorf(`"Set pricing" button was missing or disabled`)
 	}
-	if err := b.EvalUntil(ctx, `!!document.querySelector('mat-checkbox[aria-label="Select all rows"]')`, 30*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, pricingCountryTableReadyScript, 30*time.Second); err != nil {
 		return fmt.Errorf("country selection did not open: %w", err)
 	}
 	if err := settle(ctx, pricingStepSettle); err != nil {
@@ -241,15 +264,11 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 	if sel != "clicked" {
 		return fmt.Errorf(`"Select all rows" control was not found`)
 	}
-	// The selection model lags the checkbox: Continue must wait until the
-	// console itself reports countries are selected, or the dialog prices an
-	// empty set (proven against the live console).
-	const selectionCountedScript = `(() => /\d+ countries \/ regions selected/i.test(document.body.innerText))()`
-	if err := b.EvalUntil(ctx, selectionCountedScript, 15*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, pricingSelectionCountedScript, 15*time.Second); err != nil {
 		return fmt.Errorf("countries were not selected after Select all: %w", err)
 	}
 	if err := b.EvalUntil(ctx, pricingContinueEnabledScript, 15*time.Second); err != nil {
-		return fmt.Errorf("Continue was not enabled after selecting countries: %w", err)
+		return fmt.Errorf("the Continue button was not enabled after selecting countries: %w", err)
 	}
 	if err := settle(ctx, pricingStepSettle); err != nil {
 		return err
@@ -312,15 +331,7 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 		return fmt.Errorf("price dialog did not close: %w", err)
 	}
 	dbg("dialog gone")
-	// The wizard is done when its draft is staged with an enabled "Save
-	// changes" AND the table shows computed prices. The table reflects the
-	// staged draft, so a submission that lost the price (empty draft) fails
-	// this check instead of looking successful.
-	set := formHelpers + ` && ` + pricingHelpers + ` && (() => {
-	  const p = window.__gplayPricing;
-	  return p.staged() && p.enabled(p.saveButton()) && p.pricesSet();
-	})()`
-	if err := b.EvalUntil(ctx, set, pricingPostSetTimeout); err != nil {
+	if err := b.EvalUntil(ctx, pricingWizardDoneScript, pricingPostSetTimeout); err != nil {
 		return fmt.Errorf("the pricing change was not staged with prices after the wizard: %w", err)
 	}
 	return nil
@@ -418,8 +429,7 @@ func DiscardAppPricing(ctx context.Context, b *Browser) error {
 		}
 		return nil
 	}
-	settled := formHelpers + ` && ` + pricingHelpers + ` && !window.__gplayPricing.staged()`
-	if err := b.EvalUntil(ctx, settled, 15*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, pricingUnstagedScript, 15*time.Second); err != nil {
 		return fmt.Errorf("discarding the staged pricing change did not complete: %w", err)
 	}
 	return nil

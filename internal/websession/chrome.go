@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -116,7 +117,7 @@ func discoverChromeCookieDBs(userDataDir string) ([]string, error) {
 	entries, err := os.ReadDir(userDataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("Chrome profile directory not found at %s", userDataDir)
+			return nil, fmt.Errorf("no Chrome profile directory at %s", userDataDir)
 		}
 		return nil, fmt.Errorf("reading Chrome profiles: %w", err)
 	}
@@ -153,7 +154,7 @@ func chromeSafeStoragePassword(ctx context.Context) (string, error) {
 	}
 	password := strings.TrimSuffix(string(output), "\n")
 	if password == "" {
-		return "", fmt.Errorf("Chrome Safe Storage password is empty")
+		return "", fmt.Errorf("empty Chrome Safe Storage password")
 	}
 	return password, nil
 }
@@ -168,7 +169,8 @@ func readChromeRows(ctx context.Context, database string) ([]chromeCookieRow, er
 }
 
 func commandError(err error, action string) error {
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
 		if stderr := strings.TrimSpace(string(exitErr.Stderr)); stderr != "" {
 			return fmt.Errorf("%s: %s", action, stderr)
 		}
@@ -199,7 +201,7 @@ func chromeCookies(rows []chromeCookieRow, key []byte, now time.Time) ([]Cookie,
 		}
 		if row.Value != "" && row.EncryptedValue != "" {
 			if isSAPISIDName(row.Name) {
-				return nil, fmt.Errorf("Chrome %s cookie has both plaintext and encrypted values", row.Name)
+				return nil, fmt.Errorf("cookie %s from Chrome has both plaintext and encrypted values", row.Name)
 			}
 			continue
 		}
@@ -241,8 +243,10 @@ func deriveChromeKey(password string) ([]byte, error) {
 }
 
 func decryptChromeValue(key []byte, host string, encrypted []byte, dbVersion int) (string, error) {
-	if dbVersion != 24 {
-		return "", fmt.Errorf("unsupported Chrome cookie schema %d", dbVersion)
+	// Schema 24 added the domain-hash prefix checked below; newer schemas keep
+	// it, and a wrong guess still fails on the "v10" prefix or the hash.
+	if dbVersion < 24 {
+		return "", fmt.Errorf("unsupported Chrome cookie schema %d (need 24 or newer)", dbVersion)
 	}
 	if len(encrypted) < 3 || string(encrypted[:3]) != "v10" {
 		return "", fmt.Errorf("unsupported Chrome encryption prefix")
@@ -272,7 +276,7 @@ func decryptChromeValue(key []byte, host string, encrypted []byte, dbVersion int
 
 	hash := sha256.Sum256([]byte(host))
 	if len(plaintext) < len(hash) || subtle.ConstantTimeCompare(plaintext[:len(hash)], hash[:]) != 1 {
-		return "", fmt.Errorf("Chrome cookie domain hash mismatch")
+		return "", fmt.Errorf("domain hash mismatch for Chrome cookie")
 	}
 	plaintext = plaintext[len(hash):]
 	return string(plaintext), nil
@@ -297,10 +301,14 @@ func hasChromeSAPISID(cookies []Cookie) bool {
 // chromeBinaryEnv overrides Chrome executable discovery without recompiling.
 const chromeBinaryEnv = "GPLAY_CHROME_BINARY"
 
-// chromeBinary locates the Google Chrome executable on macOS.
+// chromeBinary locates the Google Chrome executable. Auto-discovery only
+// knows the macOS install locations; elsewhere the env override is the way in.
 func chromeBinary() (string, error) {
 	if custom := strings.TrimSpace(os.Getenv(chromeBinaryEnv)); custom != "" {
 		return custom, nil
+	}
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("browser-driven web commands find Chrome automatically only on macOS today; set %s to the Chrome executable path to run them here", chromeBinaryEnv)
 	}
 	home, _ := os.UserHomeDir()
 	for _, candidate := range []string{
@@ -311,7 +319,7 @@ func chromeBinary() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("Google Chrome not found; install it or set %s to the executable path", chromeBinaryEnv)
+	return "", fmt.Errorf("no Google Chrome install found; install it or set %s to the executable path", chromeBinaryEnv)
 }
 
 // LaunchChrome opens a visible Chrome window bound to its own user-data
@@ -319,9 +327,6 @@ func chromeBinary() (string, error) {
 // window must stay open while the user signs in, and the profile it writes is
 // what later imports read.
 func LaunchChrome(ctx context.Context, userDataDir, startURL string) error {
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("--browser is currently supported only on macOS; use --cookies or --cookies-file")
-	}
 	binary, err := chromeBinary()
 	if err != nil {
 		return err

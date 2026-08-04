@@ -47,6 +47,35 @@ type QuestionnaireStep struct {
 	CanSave   bool                  `json:"canSave"`
 }
 
+const questionnaireReadyScript = formHelpers + ` && ` + questionnaireHelpers +
+	` && !!document.querySelector('[debug-id=stepper]')`
+
+// questionnaireGoneScript reports that the wizard closed, which is how both a
+// save and a discard settle.
+const questionnaireGoneScript = `(() => !document.querySelector('[debug-id=stepper]'))()`
+
+// choiceClickScript toggles one questionnaire choice; choiceCheckedScript
+// reports whether it reached the wanted state.
+func choiceClickScript(id string) string {
+	return fmt.Sprintf(`(() => {
+  const w = document.querySelector('[debug-id=%s]');
+  if (!w) return false;
+  const input = w.querySelector('[role=checkbox], [role=radio], input[type=checkbox], input[type=radio]') || w;
+  input.click();
+  return true;
+})()`, jsString(id))
+}
+
+func choiceCheckedScript(id string, want bool) string {
+	return fmt.Sprintf(`(() => {
+  const w = document.querySelector('[debug-id=%s]');
+  if (!w) return false;
+  const input = w.querySelector('[role=checkbox], [role=radio], input[type=checkbox], input[type=radio]') || w;
+  const checked = input.getAttribute('aria-checked') === 'true' || input.checked === true;
+  return checked === %v;
+})()`, jsString(id), want)
+}
+
 const readQuestionnaireStepScript = `(() => {
   const q = window.__gplayQuest;
   const next = q.next();
@@ -68,8 +97,7 @@ func OpenQuestionnaire(ctx context.Context, b *Browser, developerID, appID, acco
 	if err := b.Navigate(ctx, appContentURL(developerID, appID, account, page)); err != nil {
 		return err
 	}
-	ready := formHelpers + ` && ` + questionnaireHelpers + ` && !!document.querySelector('[debug-id=stepper]')`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, questionnaireReadyScript, 60*time.Second); err != nil {
 		return fmt.Errorf("questionnaire %q did not load (is the gplay browser profile signed in?): %w", page, err)
 	}
 	return nil
@@ -104,24 +132,6 @@ func SetStepChoices(ctx context.Context, b *Browser, ids []string) error {
 			return fmt.Errorf("choice %q is not on this step (visible: %s)", id, strings.Join(stepChoiceIDs(step), ", "))
 		}
 	}
-	clickScript := func(id string) string {
-		return fmt.Sprintf(`(() => {
-	  const w = document.querySelector('[debug-id=%s]');
-	  if (!w) return false;
-	  const input = w.querySelector('[role=checkbox], [role=radio], input[type=checkbox], input[type=radio]') || w;
-	  input.click();
-	  return true;
-	})()`, jsString(id))
-	}
-	checkedScript := func(id string, want bool) string {
-		return fmt.Sprintf(`(() => {
-	  const w = document.querySelector('[debug-id=%s]');
-	  if (!w) return false;
-	  const input = w.querySelector('[role=checkbox], [role=radio], input[type=checkbox], input[type=radio]') || w;
-	  const checked = input.getAttribute('aria-checked') === 'true' || input.checked === true;
-	  return checked === %v;
-	})()`, jsString(id), want)
-	}
 	for _, c := range step.Choices {
 		want := false
 		for _, id := range ids {
@@ -133,10 +143,10 @@ func SetStepChoices(ctx context.Context, b *Browser, ids []string) error {
 		if c.Selected == want {
 			continue
 		}
-		if err := b.Eval(ctx, clickScript(c.ID), nil); err != nil {
+		if err := b.Eval(ctx, choiceClickScript(c.ID), nil); err != nil {
 			return fmt.Errorf("toggling %q: %w", c.ID, err)
 		}
-		if err := b.EvalUntil(ctx, checkedScript(c.ID, want), 5*time.Second); err != nil {
+		if err := b.EvalUntil(ctx, choiceCheckedScript(c.ID, want), 5*time.Second); err != nil {
 			return fmt.Errorf("toggling %q: %w", c.ID, err)
 		}
 	}
@@ -151,6 +161,31 @@ func stepChoiceIDs(step *QuestionnaireStep) []string {
 	return ids
 }
 
+const questionnaireNextClickScript = formHelpers + ` && ` + questionnaireHelpers + ` && (() => {
+  const q = window.__gplayQuest;
+  const n = q.next();
+  if (!n || n.disabled) return false;
+  n.click();
+  return true;
+})()`
+
+const questionnaireSaveClickScript = formHelpers + ` && ` + questionnaireHelpers + ` && (() => {
+  const q = window.__gplayQuest;
+  const s = q.save();
+  if (!s || s.disabled) return false;
+  s.click();
+  return true;
+})()`
+
+// questionnaireAdvancedScript reports a step transition: the step label or the
+// choices set changes when the wizard moves on.
+func questionnaireAdvancedScript(before string) string {
+	return formHelpers + ` && ` + questionnaireHelpers + fmt.Sprintf(` && (() => {
+  const q = window.__gplayQuest;
+  return q.stepLabel() !== %s || q.choices().length === 0;
+})()`, jsString(before))
+}
+
 // QuestionnaireNext advances to the next step, returning false when the
 // wizard is already on its last step.
 func QuestionnaireNext(ctx context.Context, b *Browser) (bool, error) {
@@ -163,24 +198,13 @@ func QuestionnaireNext(ctx context.Context, b *Browser) (bool, error) {
 	}
 	before := step.StepLabel
 	var clicked bool
-	if err := b.Eval(ctx, formHelpers+` && `+questionnaireHelpers+` && (() => {
-	  const q = window.__gplayQuest;
-	  const n = q.next();
-	  if (!n || n.disabled) return false;
-	  n.click();
-	  return true;
-	})()`, &clicked); err != nil {
+	if err := b.Eval(ctx, questionnaireNextClickScript, &clicked); err != nil {
 		return false, err
 	}
 	if !clicked {
 		return false, fmt.Errorf("the Next button was missing or disabled")
 	}
-	// The step label or the choices set changes on step transitions.
-	advanced := formHelpers + ` && ` + questionnaireHelpers + fmt.Sprintf(` && (() => {
-	  const q = window.__gplayQuest;
-	  return q.stepLabel() !== %s || q.choices().length === 0;
-	})()`, jsString(before))
-	if err := b.EvalUntil(ctx, advanced, 30*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, questionnaireAdvancedScript(before), 30*time.Second); err != nil {
 		return false, fmt.Errorf("the questionnaire did not advance: %w", err)
 	}
 	return true, nil
@@ -190,24 +214,25 @@ func QuestionnaireNext(ctx context.Context, b *Browser) (bool, error) {
 // to disappear. Callers must re-open the questionnaire to verify persistence.
 func QuestionnaireSave(ctx context.Context, b *Browser, timeout time.Duration) error {
 	var clicked bool
-	if err := b.Eval(ctx, formHelpers+` && `+questionnaireHelpers+` && (() => {
-	  const q = window.__gplayQuest;
-	  const s = q.save();
-	  if (!s || s.disabled) return false;
-	  s.click();
-	  return true;
-	})()`, &clicked); err != nil {
+	if err := b.Eval(ctx, questionnaireSaveClickScript, &clicked); err != nil {
 		return err
 	}
 	if !clicked {
 		return fmt.Errorf("the questionnaire's Save button was missing or disabled")
 	}
-	settled := `(() => !document.querySelector('[debug-id=stepper]'))()`
-	if err := b.EvalUntil(ctx, settled, timeout); err != nil {
+	if err := b.EvalUntil(ctx, questionnaireGoneScript, timeout); err != nil {
 		return fmt.Errorf("saving the questionnaire did not complete: %w", err)
 	}
 	return nil
 }
+
+const discardQuestionnaireClickScript = `(() => {
+  const btn = [...document.querySelectorAll('button')].find(x =>
+    x.getClientRects().length && /^discard/i.test(x.textContent.trim()));
+  if (!btn || btn.disabled) return false;
+  btn.click();
+  return true;
+})()`
 
 const discardConfirmScript = `(() => {
   const d = document.querySelector('.pane.modal.visible') ||
@@ -225,13 +250,7 @@ const discardConfirmScript = `(() => {
 // wizard has no unsaved changes, so there is nothing to do.
 func QuestionnaireDiscard(ctx context.Context, b *Browser) error {
 	var clicked bool
-	if err := b.Eval(ctx, `(() => {
-	  const btn = [...document.querySelectorAll('button')].find(x =>
-	    x.getClientRects().length && /^discard/i.test(x.textContent.trim()));
-	  if (!btn || btn.disabled) return false;
-	  btn.click();
-	  return true;
-	})()`, &clicked); err != nil {
+	if err := b.Eval(ctx, discardQuestionnaireClickScript, &clicked); err != nil {
 		return err
 	}
 	if !clicked {
@@ -246,8 +265,7 @@ func QuestionnaireDiscard(ctx context.Context, b *Browser) error {
 	if confirm == "no-button" {
 		return fmt.Errorf("the discard confirmation dialog has no recognizable confirm button")
 	}
-	settled := `(() => !document.querySelector('[debug-id=stepper]'))()`
-	if err := b.EvalUntil(ctx, settled, 15*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, questionnaireGoneScript, 15*time.Second); err != nil {
 		return fmt.Errorf("discarding the questionnaire did not complete: %w", err)
 	}
 	return nil

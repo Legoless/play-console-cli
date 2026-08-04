@@ -32,7 +32,7 @@ func TestReadContentRating(t *testing.T) {
 	})
 	b := connectFake(t, f)
 
-	state, err := ReadContentRating(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	state, err := ReadContentRating(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatal(err)
 	}

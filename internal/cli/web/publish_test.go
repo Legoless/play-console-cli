@@ -354,13 +354,13 @@ func stubPublishBrowser(t *testing.T, f *fakePublishBrowser) {
 func setupPublish(t *testing.T, f *fakePublishBrowser) {
 	t.Helper()
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
-	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
+	saveWebSession(t)
+	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo","16":"en-US"}]}`))
 	stubPublishBrowser(t, f)
 }
 
 func availabilityArgs(extra ...string) []string {
-	return append([]string{"--package", "com.unifiedsense.aerocoach"}, extra...)
+	return append([]string{"--package", "com.example.demo"}, extra...)
 }
 
 // --- status ---
@@ -423,7 +423,7 @@ func TestWebAppsStatus_ReportsSetupAndPublishing(t *testing.T) {
 
 func TestWebAppsStatus_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[]}`))
 	f := &fakePublishBrowser{failAt: "read-overview"}
 	stubPublishBrowser(t, f)
@@ -637,7 +637,7 @@ func TestWebAppsAvailability_VerifiesSavedSelection(t *testing.T) {
 
 func TestWebAppsAvailability_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[]}`))
 	f := &fakePublishBrowser{failAt: "open-countries"}
 	stubPublishBrowser(t, f)
@@ -657,8 +657,8 @@ func TestWebAppsAvailability_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
 
 // --- review ---
 
-func reviewArgs(extra ...string) []string {
-	return append([]string{"--package", "com.unifiedsense.aerocoach", "--confirm"}, extra...)
+func reviewArgs() []string {
+	return []string{"--package", "com.example.demo", "--confirm"}
 }
 
 func TestWebAppsReview_ValidatesFlags(t *testing.T) {
@@ -792,7 +792,7 @@ func TestWebAppsReview_VerifiesSent(t *testing.T) {
 // --- pricing ---
 
 func pricingArgs(extra ...string) []string {
-	return append([]string{"--package", "com.unifiedsense.aerocoach"}, extra...)
+	return append([]string{"--package", "com.example.demo"}, extra...)
 }
 
 func TestWebAppsPricing_ValidatesFlags(t *testing.T) {
@@ -952,7 +952,7 @@ func TestWebAppsPricing_VerifiesSavedPrice(t *testing.T) {
 
 func TestWebAppsPricing_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[]}`))
 	f := &fakePublishBrowser{failAt: "open-pricing"}
 	stubPublishBrowser(t, f)
@@ -1023,8 +1023,8 @@ func TestWebAppsAvailability_ErrorsWhenRemovalDoesNotStick(t *testing.T) {
 
 // --- rollout ---
 
-func rolloutArgs(extra ...string) []string {
-	return append([]string{"--package", "com.unifiedsense.aerocoach", "--confirm"}, extra...)
+func rolloutArgs() []string {
+	return []string{"--package", "com.example.demo", "--confirm"}
 }
 
 func TestWebAppsRollout_ValidatesFlags(t *testing.T) {
@@ -1143,7 +1143,7 @@ func TestWebAppsRollout_ReportsBlockedSend(t *testing.T) {
 
 func TestWebAppsRollout_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[]}`))
 	f := &fakePublishBrowser{failAt: "open-releases"}
 	stubPublishBrowser(t, f)

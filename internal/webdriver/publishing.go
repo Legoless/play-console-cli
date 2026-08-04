@@ -152,6 +152,12 @@ const publishingOverviewSettledScript = `(() => {
   return enabled || p.blockedReason() !== '' || /changes in review/i.test(document.body.innerText || '');
 })()`
 
+// The *Wait forms reinstall the helpers on every poll, since a re-render wipes
+// window.__gplayPublish and would make the bare script throw until timeout.
+const publishingOverviewReadyWait = formHelpers + ` && ` + publishHelpers + ` && ` + publishingOverviewReadyScript
+
+const publishingOverviewSettledWait = formHelpers + ` && ` + publishHelpers + ` && ` + publishingOverviewSettledScript
+
 // ReadPublishingOverview opens the app's Publishing overview and reads its
 // state. It changes nothing.
 func ReadPublishingOverview(ctx context.Context, b *Browser, developerID, appID, account string) (*PublishingOverview, error) {
@@ -161,9 +167,8 @@ func ReadPublishingOverview(ctx context.Context, b *Browser, developerID, appID,
 	if err := b.Navigate(ctx, publishingOverviewURL(developerID, appID, account)); err != nil {
 		return nil, err
 	}
-	ready := formHelpers + ` && ` + publishHelpers + ` && ` + publishingOverviewReadyScript
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("Publishing overview did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, publishingOverviewReadyWait, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the Publishing overview did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var overview PublishingOverview
 	if err := b.Eval(ctx, readPublishingOverviewScript, &overview); err != nil {
@@ -174,8 +179,7 @@ func ReadPublishingOverview(ctx context.Context, b *Browser, developerID, appID,
 	}
 	// Disabled with no explanation means the reviewability evaluation was
 	// still in flight. Wait for the definitive state, then read once more.
-	settled := formHelpers + ` && ` + publishHelpers + ` && ` + publishingOverviewSettledScript
-	if err := b.EvalUntil(ctx, settled, 60*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, publishingOverviewSettledWait, 60*time.Second); err != nil {
 		return &overview, nil // best effort: treat as blocked without a reason
 	}
 	if err := b.Eval(ctx, readPublishingOverviewScript, &overview); err != nil {
@@ -210,6 +214,8 @@ const sendForReviewConfirmScript = `(() => {
   return 'confirmed';
 })()`
 
+const sendForReviewClickWait = formHelpers + ` && ` + publishHelpers + ` && ` + sendForReviewClickScript
+
 const sendForReviewSettledScript = `(() => {
   const p = window.__gplayPublish;
   if (!p) return false;
@@ -224,7 +230,7 @@ const sendForReviewSettledScript = `(() => {
 // verify the outcome.
 func SendForReview(ctx context.Context, b *Browser, timeout time.Duration) error {
 	var clicked bool
-	if err := b.Eval(ctx, formHelpers+` && `+publishHelpers+` && `+sendForReviewClickScript, &clicked); err != nil {
+	if err := b.Eval(ctx, sendForReviewClickWait, &clicked); err != nil {
 		return err
 	}
 	if !clicked {
@@ -294,6 +300,9 @@ const dashboardHelpers = `
 })()
 `
 
+const appDashboardReadyScript = formHelpers + ` && ` + dashboardHelpers +
+	` && window.__gplayDash.goals().length > 0`
+
 const readAppSetupScript = `(() => ({
   appState: window.__gplayDash.appState(),
   goals: window.__gplayDash.goals(),
@@ -308,9 +317,8 @@ func ReadAppSetup(ctx context.Context, b *Browser, developerID, appID, account s
 	if err := b.Navigate(ctx, appDashboardURL(developerID, appID, account)); err != nil {
 		return nil, err
 	}
-	ready := formHelpers + ` && ` + dashboardHelpers + ` && window.__gplayDash.goals().length > 0`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("app dashboard did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, appDashboardReadyScript, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the app dashboard did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var setup AppSetup
 	if err := b.Eval(ctx, readAppSetupScript, &setup); err != nil {

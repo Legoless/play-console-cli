@@ -71,7 +71,7 @@ Examples:
 
 			if shared.IsDryRun(ctx) {
 				fmt.Fprintf(os.Stderr, "[DRY RUN] would %s: package=%s factor=%q\n",
-					map[bool]string{true: "add form factor", false: "read form factors"}[write], packageName, factor) // #nosec G705 -- stderr log
+					map[bool]string{true: "add form factor", false: "read form factors"}[write], packageName, factor)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
 			}
@@ -90,7 +90,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 
 			before, err := pb.ReadDistribution(ctx, target.DeveloperID, target.AppID, sess.UserEmail)
 			if err != nil {

@@ -21,7 +21,7 @@ func TestReadPromotions_EmptyState(t *testing.T) {
 	f.setReply(readPromotionsScript, map[string]any{"promotions": []map[string]any{}})
 	b := connectFake(t, f)
 
-	state, err := ReadPromotions(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	state, err := ReadPromotions(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestCreatePaidAppPromotion_FailsClosedOnTerms(t *testing.T) {
 	f := newFakeChrome(t)
 	b := connectFake(t, f)
 
-	_, err := CreatePaidAppPromotion(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", false, PaidAppPromotionForm{
+	_, err := CreatePaidAppPromotion(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, false, PaidAppPromotionForm{
 		Name: "Launch", StartDate: "2026-08-02", EndDate: "2026-08-03", CodeCount: 10,
 	}, time.Second)
 	if err == nil || !strings.Contains(err.Error(), "accepted manually") {
@@ -71,7 +71,7 @@ func TestCreatePaidAppPromotion_VisibleTermsModalVetoesAcceptedStatus(t *testing
 	f.setReply(promotionTermsModalVisibleScript, true)
 	b := connectFake(t, f)
 
-	_, err := CreatePaidAppPromotion(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", true, PaidAppPromotionForm{
+	_, err := CreatePaidAppPromotion(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, true, PaidAppPromotionForm{
 		Name: "Launch", StartDate: "2026-08-02", EndDate: "2026-08-03", CodeCount: 10,
 	}, time.Second)
 	if err == nil || !strings.Contains(err.Error(), "accepted manually") {
@@ -102,7 +102,7 @@ func TestCreatePaidAppPromotion_VerifiesExactPromotion(t *testing.T) {
 			f.setReply(readPromotionsScript, map[string]any{"promotions": []Promotion{tt.result}})
 			b := connectFake(t, f)
 
-			_, err := CreatePaidAppPromotion(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", true, form, time.Second)
+			_, err := CreatePaidAppPromotion(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, true, form, time.Second)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
 			}

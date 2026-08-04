@@ -12,35 +12,26 @@ func withRolloutHelpers(script string) string {
 }
 
 func TestProductionTrackURL(t *testing.T) {
-	got := productionTrackURL(publishingTestDeveloper, publishingTestApp, "dal@unifiedsense.com")
-	want := "https://play.google.com/console/developers/6901885972034847549/app/4974539508825146246/tracks/production?authuser=dal%40unifiedsense.com&hl=en"
+	got := productionTrackURL(publishingTestDeveloper, publishingTestApp, testAccount)
+	want := "https://play.google.com/console/developers/1234567890/app/9876543210/tracks/production?authuser=me%40example.com&hl=en"
 	if got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
 }
 
-func releasesTabReadyExpr() string {
-	return formHelpers + ` && ` + rolloutHelpers +
-		` && !! [...document.querySelectorAll('[role=tab]')].find(t => /^releases$/i.test(t.textContent.trim()))`
-}
-
-func draftReadyExpr() string {
-	return formHelpers + ` && ` + rolloutHelpers + ` && !!window.__gplayRollout.editDraftButton()`
-}
-
 func TestOpenProductionReleases_NoDraft(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(releasesTabReadyExpr(), true)
+	f.setReply(releasesTabReadyScript, true)
 	f.setReply(openReleasesTabScript, true)
 	// No draft: edit button never appears.
-	f.setReply(draftReadyExpr(), false)
+	f.setReply(draftReleaseReadyScript, false)
 	b := connectFake(t, f)
 
 	orig := rolloutDraftTimeout
 	rolloutDraftTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { rolloutDraftTimeout = orig })
 
-	err := OpenProductionReleases(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	err := OpenProductionReleases(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err == nil || !strings.Contains(err.Error(), "no draft release") {
 		t.Errorf("err = %v, want no-draft error", err)
 	}
@@ -48,12 +39,12 @@ func TestOpenProductionReleases_NoDraft(t *testing.T) {
 
 func TestOpenProductionReleases_FindsDraft(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(releasesTabReadyExpr(), true)
+	f.setReply(releasesTabReadyScript, true)
 	f.setReply(openReleasesTabScript, true)
-	f.setReply(draftReadyExpr(), true)
+	f.setReply(draftReleaseReadyScript, true)
 	b := connectFake(t, f)
 
-	if err := OpenProductionReleases(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com"); err != nil {
+	if err := OpenProductionReleases(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount); err != nil {
 		t.Fatalf("OpenProductionReleases: %v", err)
 	}
 }
@@ -61,10 +52,10 @@ func TestOpenProductionReleases_FindsDraft(t *testing.T) {
 func scriptReleaseWizard(t *testing.T, f *fakeChrome) {
 	t.Helper()
 	f.setReply(withRolloutHelpers(editDraftClickScript), true)
-	f.setReply(formHelpers+` && `+rolloutHelpers+` && !!window.__gplayRollout.nextButton()`, true)
+	f.setReply(preparePageReadyScript, true)
 	f.setReply(readPrepareScript, map[string]any{"releaseName": "1.2.1"})
 	f.setReply(withRolloutHelpers(nextClickScript), true)
-	f.setReply(formHelpers+` && `+rolloutHelpers+` && !!window.__gplayRollout.saveButton()`, true)
+	f.setReply(reviewPageReadyScript, true)
 	f.setReply(readReviewScript, map[string]any{
 		"warnings": []string{"There is no deobfuscation file associated with this App Bundle."},
 		"canSave":  true,

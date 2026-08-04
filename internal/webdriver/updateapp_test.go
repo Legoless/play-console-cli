@@ -8,8 +8,8 @@ import (
 )
 
 func TestAppSettingsURL(t *testing.T) {
-	got := appSettingsURL("6901885972034847549", "4974539508825146246", "dal@unifiedsense.com")
-	want := "https://play.google.com/console/developers/6901885972034847549/app/4974539508825146246/store-settings?authuser=dal%40unifiedsense.com&hl=en"
+	got := appSettingsURL(publishingTestDeveloper, publishingTestApp, testAccount)
+	want := "https://play.google.com/console/developers/1234567890/app/9876543210/store-settings?authuser=me%40example.com&hl=en"
 	if got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
@@ -18,11 +18,7 @@ func TestAppSettingsURL(t *testing.T) {
 func TestReadAppSettings(t *testing.T) {
 	f := newFakeChrome(t)
 	f.setReply(readAppSettingsScript, map[string]any{"kind": "game", "category": "Educational", "canSubmit": true})
-	b, err := Connect(context.Background(), portDir(t, f), 2*time.Second)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer b.Close()
+	b := connectFake(t, f)
 
 	state, err := ReadAppSettings(context.Background(), b)
 	if err != nil {
@@ -36,13 +32,9 @@ func TestReadAppSettings(t *testing.T) {
 func TestSetAppClassification_RejectsMissingControl(t *testing.T) {
 	f := newFakeChrome(t)
 	f.setReply(setDropdownScript("type-dropdown", "game"), "application type control not found")
-	b, err := Connect(context.Background(), portDir(t, f), 2*time.Second)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer b.Close()
+	b := connectFake(t, f)
 
-	err = SetAppClassification(context.Background(), b, "game", "Educational")
+	err := SetAppClassification(context.Background(), b, "game", "Educational")
 	if err == nil || !strings.Contains(err.Error(), "control not found") {
 		t.Errorf("err = %v", err)
 	}
@@ -50,13 +42,9 @@ func TestSetAppClassification_RejectsMissingControl(t *testing.T) {
 
 func TestSubmitAppSettings_ErrorsWhenSaveDisabled(t *testing.T) {
 	f := newFakeChrome(t)
-	b, err := Connect(context.Background(), portDir(t, f), 2*time.Second)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer b.Close()
+	b := connectFake(t, f)
 
-	err = SubmitAppSettings(context.Background(), b, 300*time.Millisecond)
+	err := SubmitAppSettings(context.Background(), b, 300*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "Save") {
 		t.Errorf("err = %v, want disabled Save error", err)
 	}
@@ -66,11 +54,7 @@ func TestSubmitAppSettings_AcceptsDisabledSaveWithDialogOpen(t *testing.T) {
 	f := newFakeChrome(t)
 	f.setReply(submitAppSettingsScript, true)
 	f.setReply(appSettingsSaveSettledScript, true)
-	b, err := Connect(context.Background(), portDir(t, f), 2*time.Second)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer b.Close()
+	b := connectFake(t, f)
 
 	if err := SubmitAppSettings(context.Background(), b, 300*time.Millisecond); err != nil {
 		t.Fatalf("SubmitAppSettings: %v", err)

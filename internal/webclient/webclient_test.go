@@ -105,38 +105,43 @@ func TestDiscoverDeveloperID_NotFound(t *testing.T) {
 	}
 }
 
-// realAppSummariesPayload is the actual json+protobuf response captured from
-// playconsoleapps-pa for a single-app developer account.
-const realAppSummariesPayload = `{"1":[{"1":{"1":{"1":"6901885972034847549"},"2":{"1":"4974539508825146246"}},"2":"Aérocoach","4":{"1":[1],"2":1},"5":"com.unifiedsense.aerocoach","8":1,"16":"en-US"}]}`
+// appSummariesPayload mirrors the shape of a json+protobuf appSummaries
+// response for a single-app developer account. Values are placeholders; the
+// field numbering and nesting are the wire contract under test.
+const appSummariesPayload = `{"1":[{"1":{"1":{"1":"1234567890123456789"},"2":{"1":"9876543210987654321"}},"2":"Éxample App","4":{"1":[1],"2":1},"5":"com.example.app","8":1,"16":"en-US"}]}`
 
 func TestListApps(t *testing.T) {
 	t.Setenv(appsAPIKeyEnv, "")
+	const appsPath = "/v1/developers/1234567890123456789/appSummaries"
 	var gotPath, gotAuthUser, gotKey string
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"GET /console": func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `<script>window.serializedInitialChunks['startupData'] = `+
 				`"\x7b\x221\x22:\x7b\x228\x22:\x22runtime-test-key\x22\x7d\x7d";</script>`)
 		},
-		"GET /v1/developers/6901885972034847549/appSummaries": func(w http.ResponseWriter, r *http.Request) {
+		"GET " + appsPath: func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
 			gotAuthUser = r.Header.Get("X-Goog-AuthUser")
 			gotKey = r.Header.Get("X-Goog-Api-Key")
-			fmt.Fprint(w, realAppSummariesPayload)
+			fmt.Fprint(w, appSummariesPayload)
 		},
 	})
 	c := NewWithClient(testSession(), nil, mock.BaseURL())
-	apps, err := c.ListApps(context.Background(), "6901885972034847549")
+	apps, err := c.ListApps(context.Background(), "1234567890123456789")
 	if err != nil {
 		t.Fatalf("ListApps: %v", err)
 	}
 	if len(apps) != 1 {
 		t.Fatalf("got %d apps, want 1", len(apps))
 	}
-	if apps[0].PackageName != "com.unifiedsense.aerocoach" || apps[0].DisplayName != "Aérocoach" {
+	if apps[0].PackageName != "com.example.app" || apps[0].DisplayName != "Éxample App" {
 		t.Errorf("app = %+v", apps[0])
 	}
-	if apps[0].AppID != "4974539508825146246" {
+	if apps[0].AppID != "9876543210987654321" {
 		t.Errorf("appID = %q", apps[0].AppID)
+	}
+	if gotPath != appsPath {
+		t.Errorf("request path = %q, want %q", gotPath, appsPath)
 	}
 	if gotKey != "runtime-test-key" {
 		t.Errorf("X-Goog-Api-Key = %q, want key discovered from console HTML", gotKey)
@@ -145,7 +150,6 @@ func TestListApps(t *testing.T) {
 	if gotAuthUser != "" {
 		t.Errorf("X-Goog-AuthUser = %q, want it never sent", gotAuthUser)
 	}
-	_ = gotPath
 }
 
 func TestPromoCodesTermsAccepted(t *testing.T) {
@@ -284,19 +288,20 @@ func TestListApps_AuthError(t *testing.T) {
 	}
 }
 
-// realStartupData mirrors the console's escaped startup blob: field 2.1.1 is
-// the developer account currently in scope.
-const realStartupData = `<html><script>window.serializedInitialChunks['startupData'] = ` +
+// startupDataFixture mirrors the shape of the console's escaped startup blob:
+// field 2.1.1 is the developer account currently in scope. The ID is a
+// placeholder.
+const startupDataFixture = `<html><script>window.serializedInitialChunks['startupData'] = ` +
 	`"\x7b\x221\x22:\x7b\x221\x22:\x22\/console\/u\/2\/developers\x22\x7d,` +
-	`\x222\x22:\x7b\x221\x22:\x7b\x221\x22:\x226901885972034847549\x22\x7d,\x222\x22:3\x7d\x7d";</script></html>`
+	`\x222\x22:\x7b\x221\x22:\x7b\x221\x22:\x221234567890123456789\x22\x7d,\x222\x22:3\x7d\x7d";</script></html>`
 
 func TestParseStartupDeveloperID(t *testing.T) {
-	id, err := parseStartupDeveloperID([]byte(realStartupData))
+	id, err := parseStartupDeveloperID([]byte(startupDataFixture))
 	if err != nil {
 		t.Fatalf("parseStartupDeveloperID: %v", err)
 	}
-	if id != "6901885972034847549" {
-		t.Errorf("id = %q, want 6901885972034847549", id)
+	if id != "1234567890123456789" {
+		t.Errorf("id = %q, want 1234567890123456789", id)
 	}
 }
 
@@ -305,7 +310,7 @@ func TestParseStartupDeveloperID(t *testing.T) {
 func TestDiscoverDeveloperID_IgnoresUnrelated19DigitNumbers(t *testing.T) {
 	mock := testutil.NewMockAPI(t, map[string]http.HandlerFunc{
 		"GET /console": func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, `<html><script>var noise = "9117404620569054295";</script>`+realStartupData+`</html>`)
+			fmt.Fprint(w, `<html><script>var noise = "9117404620569054295";</script>`+startupDataFixture+`</html>`)
 		},
 	})
 	c := NewWithClient(testSession(), nil, mock.BaseURL())
@@ -313,7 +318,7 @@ func TestDiscoverDeveloperID_IgnoresUnrelated19DigitNumbers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DiscoverDeveloperID: %v", err)
 	}
-	if id != "6901885972034847549" {
+	if id != "1234567890123456789" {
 		t.Errorf("id = %q, want the structurally parsed developer", id)
 	}
 }
@@ -328,7 +333,7 @@ func TestCheckPackageName(t *testing.T) {
 		},
 	})
 	c := NewWithClient(testSession(), nil, mock.BaseURL())
-	avail, err := c.CheckPackageName(context.Background(), "dev1", "com.unifiedsense.matisse")
+	avail, err := c.CheckPackageName(context.Background(), "dev1", "com.example.matisse")
 	if err != nil {
 		t.Fatalf("CheckPackageName: %v", err)
 	}
@@ -338,7 +343,7 @@ func TestCheckPackageName(t *testing.T) {
 	if gotMethod != http.MethodGet {
 		t.Errorf("method = %s, want GET", gotMethod)
 	}
-	if gotQuery != "com.unifiedsense.matisse" {
+	if gotQuery != "com.example.matisse" {
 		t.Errorf("packageName param = %q", gotQuery)
 	}
 }
@@ -373,7 +378,7 @@ func TestCreateApp(t *testing.T) {
 	c := NewWithClient(testSession(), nil, mock.BaseURL())
 	app, err := c.CreateApp(context.Background(), CreateAppRequest{
 		DeveloperID: "dev1", Title: "Matisse", DefaultLanguage: "en-US",
-		Kind: AppKindApp, Paid: false, PackageName: "com.unifiedsense.matisse",
+		Kind: AppKindApp, Paid: false, PackageName: "com.example.matisse",
 		MeetsGuidelines: true, USLawCompliant: true,
 	})
 	if err != nil {
@@ -386,7 +391,7 @@ func TestCreateApp(t *testing.T) {
 		t.Errorf("method = %s, want POST", gotMethod)
 	}
 	// Wire contract: numeric field keys from the console's own schema.
-	for _, want := range []string{`"1":{"1":"dev1"}`, `"2":"Matisse"`, `"3":"en-US"`, `"4":1`, `"5":false`, `"6":true`, `"7":true`, `"11":"com.unifiedsense.matisse"`} {
+	for _, want := range []string{`"1":{"1":"dev1"}`, `"2":"Matisse"`, `"3":"en-US"`, `"4":1`, `"5":false`, `"6":true`, `"7":true`, `"11":"com.example.matisse"`} {
 		if !strings.Contains(gotBody, want) {
 			t.Errorf("body missing %s: %s", want, gotBody)
 		}

@@ -27,6 +27,17 @@ type DeclarationsState struct {
 	Actioned      []Declaration `json:"actioned"`
 }
 
+// appContentReadyScript waits for the App content overview's tab strip,
+// appContentLoadedScript for the Need attention tab's content, and
+// actionedDeclarationsReadyScript for the Actioned tab's sections.
+const appContentReadyScript = formHelpers + ` && !!document.querySelector('[debug-id=tab-strip]') &&
+  !! [...document.querySelectorAll('[role=tab]')].find(t => /actioned/i.test(t.textContent))`
+
+const appContentLoadedScript = `(/all caught up/i.test(document.body.innerText || '')) ||
+  !!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`
+
+const actionedDeclarationsReadyScript = `!!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`
+
 const openActionedTabScript = `(() => {
   const tab = [...document.querySelectorAll('[role=tab]')].find(t => /actioned/i.test(t.textContent));
   if (!tab) return false;
@@ -39,9 +50,9 @@ const readDeclarationsScript = `(() => {
   const sections = sel => [...document.querySelectorAll(sel)].map(s => {
     const key = s.getAttribute('debug-id')
       .replace('policy-declaration-id-', '').replace('-section', '');
-    const labelled = s.querySelector('[aria-label^="Show details for "]');
-    const title = labelled
-      ? labelled.getAttribute('aria-label').replace('Show details for ', '')
+    const labeled = s.querySelector('[aria-label^="Show details for "]');
+    const title = labeled
+      ? labeled.getAttribute('aria-label').replace('Show details for ', '')
       : clean((s.querySelector('[debug-id=title-text]') || {}).innerText);
     const text = clean(s.innerText);
     const m = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}/.exec(text);
@@ -75,14 +86,11 @@ func ReadDeclarations(ctx context.Context, b *Browser, developerID, appID, accou
 	if err := b.Navigate(ctx, appContentURL(developerID, appID, account, "overview")); err != nil {
 		return nil, err
 	}
-	ready := formHelpers + ` && !!document.querySelector('[debug-id=tab-strip]') &&
-	  !! [...document.querySelectorAll('[role=tab]')].find(t => /actioned/i.test(t.textContent))`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("App content page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, appContentReadyScript, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the App content page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	// The Need attention tab is the default view; read it before switching.
-	if err := b.EvalUntil(ctx, `(/all caught up/i.test(document.body.innerText || '')) ||
-	  !!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`, 30*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, appContentLoadedScript, 30*time.Second); err != nil {
 		return nil, fmt.Errorf("declarations did not load: %w", err)
 	}
 	var attention []Declaration
@@ -94,9 +102,9 @@ func ReadDeclarations(ctx context.Context, b *Browser, developerID, appID, accou
 		return nil, err
 	}
 	if !opened {
-		return nil, fmt.Errorf("Actioned tab was not found on the App content page")
+		return nil, fmt.Errorf("no Actioned tab was found on the App content page")
 	}
-	if err := b.EvalUntil(ctx, `!!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`, 30*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, actionedDeclarationsReadyScript, 30*time.Second); err != nil {
 		return nil, fmt.Errorf("completed declarations did not load: %w", err)
 	}
 	var wire struct {
@@ -130,12 +138,36 @@ const declarationFormHelpers = `
 })()
 `
 
+const declarationFormReadyScript = declarationFormHelpers + ` && !!window.__gplayDecl.bar()`
+
+// radioClickScript clicks the declaration form's radio at index (0 = yes,
+// 1 = no); radioCheckedScript reports whether that radio ended up selected.
+func radioClickScript(index int) string {
+	return declarationFormHelpers + fmt.Sprintf(` && (() => {
+  const r = window.__gplayDecl.radios();
+  if (r.length < 2) return 'no-radios';
+  r[%d].click();
+  return 'clicked';
+})()`, index)
+}
+
+func radioCheckedScript(index int) string {
+	return declarationFormHelpers + fmt.Sprintf(` && (() => {
+  const r = window.__gplayDecl.radios();
+  if (r.length < 2) return false;
+  const c = r[%d].getAttribute('aria-checked');
+  return c === 'true' || r[%d].checked === true;
+})()`, index, index)
+}
+
 // RadioDeclarationState is a yes/no declaration form's state.
 type RadioDeclarationState struct {
 	Answer   string `json:"answer"` // "yes", "no", or "" when unreadable
 	CanSave  bool   `json:"canSave"`
 	Saveable bool   `json:"-"`
 }
+
+const readRadioDeclarationWait = declarationFormHelpers + ` && ` + readRadioDeclarationScript
 
 const readRadioDeclarationScript = `(() => {
   const d = window.__gplayDecl;
@@ -157,7 +189,7 @@ func ReadRadioDeclaration(ctx context.Context, b *Browser, developerID, appID, a
 		return nil, err
 	}
 	var state RadioDeclarationState
-	if err := b.Eval(ctx, declarationFormHelpers+` && `+readRadioDeclarationScript, &state); err != nil {
+	if err := b.Eval(ctx, readRadioDeclarationWait, &state); err != nil {
 		return nil, err
 	}
 	return &state, nil
@@ -170,8 +202,7 @@ func openDeclarationForm(ctx context.Context, b *Browser, developerID, appID, ac
 	if err := b.Navigate(ctx, appContentURL(developerID, appID, account, page)); err != nil {
 		return err
 	}
-	ready := declarationFormHelpers + ` && !!window.__gplayDecl.bar()`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, declarationFormReadyScript, 60*time.Second); err != nil {
 		return fmt.Errorf("declaration form %q did not load (is the gplay browser profile signed in?): %w", page, err)
 	}
 	return nil
@@ -200,26 +231,14 @@ func SetRadioDeclaration(ctx context.Context, b *Browser, developerID, appID, ac
 	if yes {
 		index = 0
 	}
-	click := declarationFormHelpers + fmt.Sprintf(` && (() => {
-  const r = window.__gplayDecl.radios();
-  if (r.length < 2) return 'no-radios';
-  r[%d].click();
-  return 'clicked';
-})()`, index)
 	var result string
-	if err := b.Eval(ctx, click, &result); err != nil {
+	if err := b.Eval(ctx, radioClickScript(index), &result); err != nil {
 		return false, err
 	}
 	if result != "clicked" {
 		return false, fmt.Errorf("the %s form has no yes/no radios to set", page)
 	}
-	checked := declarationFormHelpers + fmt.Sprintf(` && (() => {
-  const r = window.__gplayDecl.radios();
-  if (r.length < 2) return false;
-  const c = r[%d].getAttribute('aria-checked');
-  return c === 'true' || r[%d].checked === true;
-})()`, index, index)
-	if err := b.EvalUntil(ctx, checked, 10*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, radioCheckedScript(index), 10*time.Second); err != nil {
 		return false, fmt.Errorf("selecting the answer on the %s form: %w", page, err)
 	}
 	if err := submitDeclarationForm(ctx, b); err != nil {
@@ -244,6 +263,8 @@ const submitDeclarationClickScript = `(() => {
   return true;
 })()`
 
+const submitDeclarationClickWait = declarationFormHelpers + ` && ` + submitDeclarationClickScript
+
 const declarationSaveSettledScript = `(() => {
   const d = window.__gplayDecl;
   const bar = d.bar();
@@ -256,7 +277,7 @@ func submitDeclarationForm(ctx context.Context, b *Browser) error {
 		return err
 	}
 	var clicked bool
-	if err := b.Eval(ctx, declarationFormHelpers+` && `+submitDeclarationClickScript, &clicked); err != nil {
+	if err := b.Eval(ctx, submitDeclarationClickWait, &clicked); err != nil {
 		return err
 	}
 	if !clicked {
@@ -273,6 +294,26 @@ const privacyPolicyInputReadyScript = `(() => {
   return !!(i && i.getClientRects().length);
 })()`
 
+const readPrivacyPolicyURLScript = `(() => {
+  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
+  return i ? i.value : '';
+})()`
+
+const focusPrivacyPolicyURLScript = `(() => {
+  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
+  if (!i) return false;
+  i.focus();
+  i.setSelectionRange(0, (i.value || '').length);
+  return document.activeElement === i;
+})()`
+
+func privacyPolicyURLHeldScript(url string) string {
+	return fmt.Sprintf(`(() => {
+  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
+  return !!i && i.value === %s;
+})()`, jsString(url))
+}
+
 // SetPrivacyPolicyURL sets the privacy policy URL and saves it, verifying the
 // persisted value afterwards. Uses trusted typing like the pricing wizard.
 // It reports whether anything actually changed: when the URL is already set
@@ -285,10 +326,7 @@ func SetPrivacyPolicyURL(ctx context.Context, b *Browser, developerID, appID, ac
 		return false, fmt.Errorf("privacy policy URL input did not load: %w", err)
 	}
 	var current string
-	if err := b.Eval(ctx, `(() => {
-	  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
-	  return i ? i.value : '';
-	})()`, &current); err != nil {
+	if err := b.Eval(ctx, readPrivacyPolicyURLScript, &current); err != nil {
 		return false, err
 	}
 	if strings.TrimSpace(current) == url {
@@ -298,13 +336,7 @@ func SetPrivacyPolicyURL(ctx context.Context, b *Browser, developerID, appID, ac
 		return false, err
 	}
 	var focused bool
-	if err := b.Eval(ctx, `(() => {
-	  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
-	  if (!i) return false;
-	  i.focus();
-	  i.setSelectionRange(0, (i.value || '').length);
-	  return document.activeElement === i;
-	})()`, &focused); err != nil {
+	if err := b.Eval(ctx, focusPrivacyPolicyURLScript, &focused); err != nil {
 		return false, err
 	}
 	if !focused {
@@ -313,11 +345,7 @@ func SetPrivacyPolicyURL(ctx context.Context, b *Browser, developerID, appID, ac
 	if err := b.InsertText(ctx, url); err != nil {
 		return false, fmt.Errorf("typing the privacy policy URL: %w", err)
 	}
-	held := fmt.Sprintf(`(() => {
-	  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
-	  return !!i && i.value === %s;
-	})()`, jsString(url))
-	if err := b.EvalUntil(ctx, held, 10*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, privacyPolicyURLHeldScript(url), 10*time.Second); err != nil {
 		return false, fmt.Errorf("the privacy policy URL did not stay in the form: %w", err)
 	}
 	if err := submitDeclarationForm(ctx, b); err != nil {
@@ -328,10 +356,7 @@ func SetPrivacyPolicyURL(ctx context.Context, b *Browser, developerID, appID, ac
 		return false, fmt.Errorf("reopening the privacy policy form: %w", err)
 	}
 	var saved string
-	if err := b.Eval(ctx, `(() => {
-	  const i = document.querySelector('input[aria-label="Privacy policy URL"], [debug-id=privacy-policy-url-input] input');
-	  return i ? i.value : '';
-	})()`, &saved); err != nil {
+	if err := b.Eval(ctx, readPrivacyPolicyURLScript, &saved); err != nil {
 		return false, err
 	}
 	if saved != url {

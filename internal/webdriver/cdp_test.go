@@ -134,7 +134,7 @@ func TestConnectAndEval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	var got int
 	if err := b.Eval(context.Background(), "1+1", &got); err != nil {
@@ -154,7 +154,7 @@ func TestEval_SurfacesPageException(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	err = b.Eval(context.Background(), "boom()", nil)
 	if err == nil || !strings.Contains(err.Error(), "ReferenceError") {
@@ -171,7 +171,7 @@ func TestEvalUntil_WaitsForTrue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	// Flip the answer once polling has started.
 	go func() {
@@ -192,7 +192,7 @@ func TestEvalUntil_TimesOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	err = b.EvalUntil(context.Background(), "never", 400*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
@@ -225,8 +225,8 @@ func TestFillAppForm_RejectsNonDefaultLanguage(t *testing.T) {
 }
 
 func TestCreateAppURL(t *testing.T) {
-	got := createAppURL("6901885972034847549")
-	if !strings.HasSuffix(got, "/developers/6901885972034847549/create-new-app") {
+	got := createAppURL(publishingTestDeveloper)
+	if !strings.HasSuffix(got, "/developers/1234567890/create-new-app") {
 		t.Errorf("url = %s", got)
 	}
 }
@@ -240,8 +240,8 @@ func TestJSString_EscapesInjection(t *testing.T) {
 }
 
 func TestAppIDFromURL(t *testing.T) {
-	m := appIDFromURL.FindStringSubmatch("/console/u/2/developers/690/app/4975550726849737454/app-dashboard")
-	if m == nil || m[1] != "4975550726849737454" {
+	m := appIDFromURL.FindStringSubmatch("/console/u/2/developers/690/app/9876543210/app-dashboard")
+	if m == nil || m[1] != "9876543210" {
 		t.Errorf("match = %v", m)
 	}
 }
@@ -253,7 +253,7 @@ func TestSubmitAppForm_ErrorsWhenButtonDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 	// The fake returns nil (false) for the click expression.
 	_, err = SubmitAppForm(context.Background(), b, 300*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "Create app") {

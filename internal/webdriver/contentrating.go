@@ -68,7 +68,7 @@ func ReadContentRating(ctx context.Context, b *Browser, developerID, appID, acco
 		return nil, err
 	}
 	if err := b.EvalUntil(ctx, contentRatingReadyExpr(), 60*time.Second); err != nil {
-		return nil, fmt.Errorf("Content ratings page did not load (is the gplay browser profile signed in?): %w", err)
+		return nil, fmt.Errorf("the Content ratings page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var state ContentRatingState
 	if err := b.Eval(ctx, readContentRatingScript, &state); err != nil {

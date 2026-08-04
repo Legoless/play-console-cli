@@ -18,7 +18,7 @@ var runContentRating = func(ctx context.Context, userDataDir, developerID, appID
 	if err != nil {
 		return nil, err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // best-effort cleanup
 	return webdriver.ReadContentRating(ctx, b, developerID, appID, account)
 }
 

@@ -10,8 +10,8 @@ import (
 
 func TestWebAppsRating_ReadsDetailedStatus(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
-	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
+	saveWebSession(t)
+	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo","16":"en-US"}]}`))
 	original := runContentRating
 	runContentRating = func(_ context.Context, _, developerID, appID, account string) (*webdriver.ContentRatingState, error) {
 		if developerID != authDeveloperID || appID != "555" || account != "me@example.com" {
@@ -36,7 +36,7 @@ func TestWebAppsRating_ReadsDetailedStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"com.unifiedsense.aerocoach", "Completed", "cert-123", "In progress", "Everyone"} {
+	for _, want := range []string{"com.example.demo", "Completed", "cert-123", "In progress", "Everyone"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("output = %s, want %q", stdout, want)
 		}

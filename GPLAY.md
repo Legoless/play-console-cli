@@ -7687,6 +7687,17 @@ List stored web sessions and optionally validate them.
 gplay web auth status [--check]
 ```
 
+List the stored Play Console web sessions, sorted by account email.
+
+Each entry reports the account email, when the session file was last written,
+and its path. Cookies are never printed. With --check, every session is used
+against the real Play Console and reported as "valid" or "expired"; this costs
+one request per session, so it is off by default.
+
+Examples:
+  gplay web auth status
+  gplay web auth status --check --output table
+
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--check` | Validate each stored session against the real Play Console | `false` |
@@ -7702,6 +7713,21 @@ Delete stored web sessions.
 ```
 gplay web auth logout [--account <email> | --all] --confirm
 ```
+
+Delete stored Play Console web sessions.
+
+Without --account the last used session is removed; --all removes every stored
+session. --confirm is required either way.
+
+This only deletes gplay's saved cookies. The Chrome profile created by
+"gplay web auth login --browser" stays signed in under ~/.gplay/web/browser, so
+a later "login --browser" restores a session without any interaction. Delete
+that directory too for a full sign-out.
+
+Examples:
+  gplay web auth logout --confirm
+  gplay web auth logout --account me@example.com --confirm
+  gplay web auth logout --all --confirm
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -7729,6 +7755,11 @@ provide, including listing and creating apps, changing App category, setting
 country availability, managing form-factor distribution and promo codes, and
 reading content-rating state.
 
+Every subcommand except "list" drives a local Google Chrome window, which gplay
+locates automatically on macOS only. On Linux and Windows, set
+GPLAY_CHROME_BINARY to the Chrome executable path; those platforms are
+untested.
+
 ---
 
 ## gplay web apps list
@@ -7752,7 +7783,7 @@ All pages are fetched automatically.
 Examples:
   gplay web apps list
   gplay web apps list --output table
-  gplay web apps list --developer 6901885972034847549
+  gplay web apps list --developer 1234567890
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -7901,7 +7932,7 @@ testing track's numeric ID) — with the user's confirmation.
 
 Examples:
   gplay web apps availability --package com.example.app
-  gplay web apps availability --package com.example.app --track 4700073296470937262
+  gplay web apps availability --package com.example.app --track 1234567890
   gplay web apps availability --package com.example.app --countries "Slovenia,Austria" --confirm
   gplay web apps availability --package com.example.app --all-countries --confirm
   gplay --dry-run web apps availability --package com.example.app --all-countries --confirm

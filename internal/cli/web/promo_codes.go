@@ -21,7 +21,7 @@ var runPromoCodes promoCodesRunner = func(ctx context.Context, userDataDir, deve
 	if err != nil {
 		return nil, err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // best-effort cleanup
 	var state *webdriver.PromotionsState
 	if form == nil {
 		state, err = webdriver.ReadPromotions(ctx, b, developerID, appID, account)
@@ -127,7 +127,7 @@ Examples:
 				if form != nil {
 					action = fmt.Sprintf("create %d paid-app promo codes named %q", form.CodeCount, form.Name)
 				}
-				fmt.Fprintf(os.Stderr, "[DRY RUN] would %s: package=%s\n", action, packageName) // #nosec G705 -- stderr log
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would %s: package=%s\n", action, packageName)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
 			}
@@ -148,7 +148,7 @@ Examples:
 				return err
 			}
 			if form != nil && !termsAccepted {
-				return fmt.Errorf("Promo codes Terms of Service must be reviewed and accepted manually in Play Console; no promotion was created")
+				return fmt.Errorf("the promo codes Terms of Service must be reviewed and accepted manually in Play Console; no promotion was created")
 			}
 			state, err := runPromoCodes(ctx, websession.BrowserProfileDir(), target.DeveloperID, target.AppID, sess.UserEmail, termsAccepted, form)
 			if err != nil {

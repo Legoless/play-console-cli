@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+const dataSafetyPageReadyScript = formHelpers + ` && !!document.querySelector('[debug-id=button-import-csv]')`
+
+const importCSVClickScript = `(() => {
+  const w = document.querySelector('[debug-id=button-import-csv]');
+  const btn = w && (w.querySelector('button') || w);
+  if (!btn || btn.disabled) return false;
+  btn.click();
+  return true;
+})()`
+
 // importDialogPresentScript reports whether the Import-from-CSV dialog is up.
 const importDialogPresentScript = `(() => {
   const d = document.querySelector('.pane.modal.visible, [role=dialog]');
@@ -31,6 +41,12 @@ const importDialogClickImportScript = `(() => {
 const importDialogGoneScript = `(() =>
   !document.querySelector('.pane.modal.visible input[type=file], [role=dialog] input[type=file]'))()`
 
+const importDialogReadyWait = importDialogPresentScript + ` && ` + importDialogHasFileInputScript
+
+// importDialogFileInputSelector is the dialog's file input, targeted by CDP's
+// DOM.setFileInputFiles rather than by script.
+const importDialogFileInputSelector = `.pane.modal.visible input[type=file], [role=dialog] input[type=file]`
+
 // ImportDataSafetyCSV imports a data safety answers CSV into the
 // data-privacy-security questionnaire. It overwrites any answers already in
 // the form; callers must walk the wizard to Preview and save (see
@@ -45,27 +61,20 @@ func ImportDataSafetyCSV(ctx context.Context, b *Browser, developerID, appID, ac
 	if err := b.Navigate(ctx, appContentURL(developerID, appID, account, "data-privacy-security")); err != nil {
 		return err
 	}
-	ready := formHelpers + ` && !!document.querySelector('[debug-id=button-import-csv]')`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return fmt.Errorf("data safety page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, dataSafetyPageReadyScript, 60*time.Second); err != nil {
+		return fmt.Errorf("the data safety page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var clicked bool
-	if err := b.Eval(ctx, `(() => {
-	  const w = document.querySelector('[debug-id=button-import-csv]');
-	  const btn = w && (w.querySelector('button') || w);
-	  if (!btn || btn.disabled) return false;
-	  btn.click();
-	  return true;
-	})()`, &clicked); err != nil {
+	if err := b.Eval(ctx, importCSVClickScript, &clicked); err != nil {
 		return err
 	}
 	if !clicked {
 		return fmt.Errorf(`"Import from CSV" button was missing or disabled`)
 	}
-	if err := b.EvalUntil(ctx, importDialogPresentScript+` && `+importDialogHasFileInputScript, 30*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, importDialogReadyWait, 30*time.Second); err != nil {
 		return fmt.Errorf("the import dialog did not open: %w", err)
 	}
-	if err := b.SetFileInputFiles(ctx, ".pane.modal.visible input[type=file], [role=dialog] input[type=file]", []string{filePath}); err != nil {
+	if err := b.SetFileInputFiles(ctx, importDialogFileInputSelector, []string{filePath}); err != nil {
 		return err
 	}
 	var result string

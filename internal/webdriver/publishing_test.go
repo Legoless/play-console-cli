@@ -7,22 +7,17 @@ import (
 	"time"
 )
 
+// Placeholder identities shared by every test in this package; never real
+// account data.
 const (
-	publishingTestDeveloper = "6901885972034847549"
-	publishingTestApp       = "4974539508825146246"
+	publishingTestDeveloper = "1234567890"
+	publishingTestApp       = "9876543210"
+	testAccount             = "me@example.com"
 )
 
-func overviewReadyExpr() string {
-	return formHelpers + ` && ` + publishHelpers + ` && ` + publishingOverviewReadyScript
-}
-
-func dashboardReadyExpr() string {
-	return formHelpers + ` && ` + dashboardHelpers + ` && window.__gplayDash.goals().length > 0`
-}
-
 func TestPublishingOverviewURL(t *testing.T) {
-	got := publishingOverviewURL(publishingTestDeveloper, publishingTestApp, "dal@unifiedsense.com")
-	want := "https://play.google.com/console/developers/6901885972034847549/app/4974539508825146246/publishing?authuser=dal%40unifiedsense.com&hl=en"
+	got := publishingOverviewURL(publishingTestDeveloper, publishingTestApp, testAccount)
+	want := "https://play.google.com/console/developers/1234567890/app/9876543210/publishing?authuser=me%40example.com&hl=en"
 	if got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
@@ -30,7 +25,7 @@ func TestPublishingOverviewURL(t *testing.T) {
 
 func TestAppDashboardURL(t *testing.T) {
 	got := appDashboardURL(publishingTestDeveloper, publishingTestApp, "")
-	want := "https://play.google.com/console/developers/6901885972034847549/app/4974539508825146246/app-dashboard"
+	want := "https://play.google.com/console/developers/1234567890/app/9876543210/app-dashboard"
 	if got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
@@ -42,13 +37,13 @@ func connectFake(t *testing.T, f *fakeChrome) *Browser {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	t.Cleanup(func() { b.Close() })
+	t.Cleanup(func() { _ = b.Close() }) //nolint:errcheck // test teardown
 	return b
 }
 
 func TestReadPublishingOverview(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(overviewReadyExpr(), true)
+	f.setReply(publishingOverviewReadyWait, true)
 	f.setReply(readPublishingOverviewScript, map[string]any{
 		"pendingChanges": []map[string]any{
 			{"section": "Store settings", "item": "App category", "description": "Select app category (Education app)"},
@@ -60,7 +55,7 @@ func TestReadPublishingOverview(t *testing.T) {
 	})
 	b := connectFake(t, f)
 
-	overview, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	overview, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadPublishingOverview: %v", err)
 	}
@@ -84,15 +79,15 @@ func TestReadPublishingOverview(t *testing.T) {
 
 func TestReadPublishingOverview_ReadsInReviewState(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(overviewReadyExpr(), true)
-	f.setReply(formHelpers+` && `+publishHelpers+` && `+publishingOverviewSettledScript, true)
+	f.setReply(publishingOverviewReadyWait, true)
+	f.setReply(publishingOverviewSettledWait, true)
 	f.setReply(readPublishingOverviewScript, map[string]any{
 		"pendingChanges": []map[string]any{},
 		"inReview":       true,
 	})
 	b := connectFake(t, f)
 
-	overview, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	overview, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadPublishingOverview: %v", err)
 	}
@@ -113,8 +108,8 @@ func countSeen(f *fakeChrome, expr string) int {
 
 func TestReadPublishingOverview_ReReadsWhenSendStateUnsettled(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(overviewReadyExpr(), true)
-	f.setReply(formHelpers+` && `+publishHelpers+` && `+publishingOverviewSettledScript, true)
+	f.setReply(publishingOverviewReadyWait, true)
+	f.setReply(publishingOverviewSettledWait, true)
 	// Both reads answer "disabled, no reason": the command must wait for the
 	// settled state and read again rather than trusting the first answer.
 	f.setReply(readPublishingOverviewScript, map[string]any{
@@ -123,7 +118,7 @@ func TestReadPublishingOverview_ReReadsWhenSendStateUnsettled(t *testing.T) {
 	})
 	b := connectFake(t, f)
 
-	if _, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com"); err != nil {
+	if _, err := ReadPublishingOverview(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount); err != nil {
 		t.Fatalf("ReadPublishingOverview: %v", err)
 	}
 	if reads := countSeen(f, readPublishingOverviewScript); reads != 2 {
@@ -139,7 +134,7 @@ func TestReadPublishingOverview_RequiresIDs(t *testing.T) {
 
 func TestReadAppSetup(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(dashboardReadyExpr(), true)
+	f.setReply(appDashboardReadyScript, true)
 	f.setReply(readAppSetupScript, map[string]any{
 		"appState": "draft",
 		"goals": []map[string]any{
@@ -155,7 +150,7 @@ func TestReadAppSetup(t *testing.T) {
 	})
 	b := connectFake(t, f)
 
-	setup, err := ReadAppSetup(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	setup, err := ReadAppSetup(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadAppSetup: %v", err)
 	}
@@ -176,7 +171,7 @@ func TestReadAppSetup(t *testing.T) {
 
 func TestSendForReview_ConfirmsDialog(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && `+publishHelpers+` && `+sendForReviewClickScript, true)
+	f.setReply(sendForReviewClickWait, true)
 	f.setReply(sendForReviewDialogPresentScript, true)
 	f.setReply(sendForReviewConfirmScript, "confirmed")
 	f.setReply(sendForReviewSettledScript, true)
@@ -189,7 +184,7 @@ func TestSendForReview_ConfirmsDialog(t *testing.T) {
 
 func TestSendForReview_SettlesWithoutDialog(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && `+publishHelpers+` && `+sendForReviewClickScript, true)
+	f.setReply(sendForReviewClickWait, true)
 	// No dialog: the page settles, so the present-probe turns true on its own.
 	f.setReply(sendForReviewDialogPresentScript, true)
 	f.setReply(sendForReviewConfirmScript, "none")
@@ -203,7 +198,7 @@ func TestSendForReview_SettlesWithoutDialog(t *testing.T) {
 
 func TestSendForReview_RefusesDisabledButton(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && `+publishHelpers+` && `+sendForReviewClickScript, false)
+	f.setReply(sendForReviewClickWait, false)
 	b := connectFake(t, f)
 
 	err := SendForReview(context.Background(), b, 300*time.Millisecond)
@@ -214,7 +209,7 @@ func TestSendForReview_RefusesDisabledButton(t *testing.T) {
 
 func TestSendForReview_ErrorsOnUnknownDialog(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && `+publishHelpers+` && `+sendForReviewClickScript, true)
+	f.setReply(sendForReviewClickWait, true)
 	f.setReply(sendForReviewDialogPresentScript, true)
 	f.setReply(sendForReviewConfirmScript, "no-button")
 	b := connectFake(t, f)

@@ -16,8 +16,9 @@ import (
 	"github.com/tamtom/play-console-cli/internal/websession"
 )
 
-// saveWebSession stores a minimal valid session for the given account.
-func saveWebSession(t *testing.T, email string) {
+// saveWebSession stores a minimal valid session for the test account.
+func saveWebSession(t *testing.T) {
+	const email = "me@example.com"
 	t.Helper()
 	if err := websession.Save(&websession.Session{
 		UserEmail: email,
@@ -45,8 +46,8 @@ func appsListMock(t *testing.T, payload string) *testutil.MockAPI {
 
 func TestWebAppsList_Executes(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
-	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
+	saveWebSession(t)
+	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo","16":"en-US"}]}`))
 
 	cmd := WebAppsListCommand()
 	if err := cmd.FlagSet.Parse(nil); err != nil {
@@ -56,7 +57,7 @@ func TestWebAppsList_Executes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apps list: %v", err)
 	}
-	for _, want := range []string{"com.unifiedsense.aerocoach", "Aérocoach", "555"} {
+	for _, want := range []string{"com.example.demo", "Aérocoach", "555"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("output missing %q: %s", want, stdout)
 		}
@@ -89,8 +90,8 @@ func TestWebAppsCommands_RegisteredInGroup(t *testing.T) {
 
 func TestWebAppsList_TableOutput(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
-	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
+	saveWebSession(t)
+	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo","16":"en-US"}]}`))
 
 	cmd := WebAppsListCommand()
 	if err := cmd.FlagSet.Parse([]string{"--output", "table"}); err != nil {
@@ -103,7 +104,7 @@ func TestWebAppsList_TableOutput(t *testing.T) {
 	if strings.HasPrefix(strings.TrimSpace(stdout), "[") || strings.Contains(stdout, `"packageName"`) {
 		t.Errorf("table output fell back to JSON: %s", stdout)
 	}
-	for _, want := range []string{"PACKAGE", "com.unifiedsense.aerocoach"} {
+	for _, want := range []string{"PACKAGE", "com.example.demo"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("table output missing %q: %s", want, stdout)
 		}
@@ -111,7 +112,7 @@ func TestWebAppsList_TableOutput(t *testing.T) {
 }
 
 // expiringAppsMock rejects the first app-list request with 403 and serves the
-// second, modelling a session that expires between runs.
+// second, modeling a session that expires between runs.
 func expiringAppsMock(t *testing.T, payload string) *testutil.MockAPI {
 	t.Helper()
 	calls := 0
@@ -136,8 +137,8 @@ func expiringAppsMock(t *testing.T, payload string) *testutil.MockAPI {
 
 func TestWebAppsList_RefreshesExpiredSessionFromBrowserProfile(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
-	mockWebClient(t, expiringAppsMock(t, `{"1":[{"1":{"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach"}]}`))
+	saveWebSession(t)
+	mockWebClient(t, expiringAppsMock(t, `{"1":[{"1":{"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo"}]}`))
 	launches := stubBrowserSeams(t, validBrowserCookies())
 
 	cmd := WebAppsListCommand()
@@ -148,7 +149,7 @@ func TestWebAppsList_RefreshesExpiredSessionFromBrowserProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apps list should recover from an expired session: %v", err)
 	}
-	if !strings.Contains(stdout, "com.unifiedsense.aerocoach") {
+	if !strings.Contains(stdout, "com.example.demo") {
 		t.Errorf("output = %s", stdout)
 	}
 	if *launches != 0 {
@@ -158,7 +159,7 @@ func TestWebAppsList_RefreshesExpiredSessionFromBrowserProfile(t *testing.T) {
 
 func TestWebAppsList_ExpiredWithNoBrowserProfileReportsAuthError(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, expiringAppsMock(t, `{"1":[]}`))
 	stubBrowserSeams(t, nil) // profile unusable
 
@@ -194,17 +195,17 @@ func createMock(t *testing.T, availability string, order *[]string) *testutil.Mo
 	})
 }
 
-func createArgs(extra ...string) []string {
-	return append([]string{
-		"--name", "Matisse", "--package", "com.unifiedsense.matisse",
+func createArgs() []string {
+	return []string{
+		"--name", "Matisse", "--package", "com.example.matisse",
 		"--kind", "app", "--pricing", "free",
 		"--accept-policies", "--accept-us-export-laws", "--confirm",
-	}, extra...)
+	}
 }
 
 func TestWebAppsCreate_AbortsWhenPackageTaken(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":4}`, &order))
 
@@ -225,7 +226,7 @@ func TestWebAppsCreate_AbortsWhenPackageTaken(t *testing.T) {
 
 func TestWebAppsCreate_RequiresDeclarations(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	cmd := WebAppsCreateCommand()
 	args := []string{"--name", "Matisse", "--package", "com.x", "--kind", "app", "--pricing", "free", "--confirm"}
 	if err := cmd.FlagSet.Parse(args); err != nil {
@@ -322,17 +323,17 @@ func stubCreator(t *testing.T, f *fakeCreator) {
 // goodState is a form the console would accept.
 func goodState() webdriver.FormState {
 	return webdriver.FormState{
-		Title: "Matisse", PackageName: "com.unifiedsense.matisse",
+		Title: "Matisse", PackageName: "com.example.matisse",
 		Game: false, Paid: false, Policies: true, Export: true, CanSubmit: true,
 	}
 }
 
 func TestWebAppsCreate_DrivesBrowserForm(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":1}`, &order))
-	f := &fakeCreator{state: goodState(), appID: "4975550726849737454"}
+	f := &fakeCreator{state: goodState(), appID: "9876543210987654"}
 	stubCreator(t, f)
 
 	cmd := WebAppsCreateCommand()
@@ -346,10 +347,10 @@ func TestWebAppsCreate_DrivesBrowserForm(t *testing.T) {
 	if strings.Join(f.steps, ",") != "fill,read,submit" {
 		t.Errorf("steps = %v, want fill,read,submit", f.steps)
 	}
-	if f.form.Title != "Matisse" || f.form.PackageName != "com.unifiedsense.matisse" || f.form.Game || f.form.Paid {
+	if f.form.Title != "Matisse" || f.form.PackageName != "com.example.matisse" || f.form.Game || f.form.Paid {
 		t.Errorf("form = %+v", f.form)
 	}
-	if !strings.Contains(stdout, "4975550726849737454") {
+	if !strings.Contains(stdout, "9876543210987654") {
 		t.Errorf("output = %s", stdout)
 	}
 	// The availability check must still run against the API first.
@@ -360,7 +361,7 @@ func TestWebAppsCreate_DrivesBrowserForm(t *testing.T) {
 
 func TestWebAppsCreate_RefusesToSubmitMismatchedForm(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":1}`, &order))
 	bad := goodState()
@@ -385,7 +386,7 @@ func TestWebAppsCreate_RefusesToSubmitMismatchedForm(t *testing.T) {
 
 func TestWebAppsCreate_RefusesWhenSubmitDisabled(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":1}`, &order))
 	st := goodState()
@@ -403,13 +404,13 @@ func TestWebAppsCreate_RefusesWhenSubmitDisabled(t *testing.T) {
 	}
 }
 
-func updateArgs(extra ...string) []string {
-	return append([]string{
-		"--package", "com.unifiedsense.aerocoach",
+func updateArgs() []string {
+	return []string{
+		"--package", "com.example.demo",
 		"--kind", "game",
 		"--category", "Educational",
 		"--confirm",
-	}, extra...)
+	}
 }
 
 func TestWebAppsUpdate_ValidatesFlags(t *testing.T) {
@@ -518,8 +519,8 @@ func stubUpdater(t *testing.T, f *fakeUpdater) {
 func setupUpdate(t *testing.T, f *fakeUpdater) {
 	t.Helper()
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
-	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
+	saveWebSession(t)
+	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo","16":"en-US"}]}`))
 	stubUpdater(t, f)
 }
 
@@ -627,7 +628,7 @@ func TestWebAppsUpdate_VerifiesSavedValue(t *testing.T) {
 
 func TestWebAppsUpdate_RejectsUnknownPackageBeforeBrowser(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[]}`))
 	f := &fakeUpdater{failAt: "open"}
 	stubUpdater(t, f)

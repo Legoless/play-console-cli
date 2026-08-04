@@ -12,30 +12,18 @@ func withCountryHelpers(script string) string {
 }
 
 func TestTrackCountriesURL(t *testing.T) {
-	got := trackCountriesURL(publishingTestDeveloper, publishingTestApp, "dal@unifiedsense.com", "production")
-	want := "https://play.google.com/console/developers/6901885972034847549/app/4974539508825146246/tracks/production?authuser=dal%40unifiedsense.com&hl=en"
+	got := trackCountriesURL(publishingTestDeveloper, publishingTestApp, testAccount, "production")
+	want := "https://play.google.com/console/developers/1234567890/app/9876543210/tracks/production?authuser=me%40example.com&hl=en"
 	if got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
 }
 
-func countriesTabReadyExpr() string {
-	return formHelpers + ` && ` + countriesHelpers +
-		` && !! [...document.querySelectorAll('[role=tab]')].find(t => /countries/i.test(t.textContent))`
-}
-
-func countriesEditorReadyExpr() string {
-	return formHelpers + ` && ` + countriesHelpers +
-		` && !!(document.querySelector('[debug-id=empty-state-include-button]') ||
-		  document.querySelector('[debug-id=edit-countries-button]') ||
-		  window.__gplayCountries.boxes().length > 0)`
-}
-
 func scriptOpenCountriesEditor(t *testing.T, f *fakeChrome) {
 	t.Helper()
-	f.setReply(countriesTabReadyExpr(), true)
+	f.setReply(countriesTabReadyScript, true)
 	f.setReply(openCountriesTabScript, true)
-	f.setReply(countriesEditorReadyExpr(), true)
+	f.setReply(countriesEditorReadyScript, true)
 	f.setReply(openCountriesEditorScript, "opened-empty")
 	f.setReply(countriesTableReadyScript, true)
 }
@@ -45,7 +33,7 @@ func TestOpenCountriesEditor(t *testing.T) {
 	scriptOpenCountriesEditor(t, f)
 	b := connectFake(t, f)
 
-	if err := OpenCountriesEditor(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "production"); err != nil {
+	if err := OpenCountriesEditor(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "production"); err != nil {
 		t.Fatalf("OpenCountriesEditor: %v", err)
 	}
 }
@@ -56,7 +44,7 @@ func TestOpenCountriesEditor_NoEntryPoint(t *testing.T) {
 	f.setReply(openCountriesEditorScript, "no-entry")
 	b := connectFake(t, f)
 
-	err := OpenCountriesEditor(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "production")
+	err := OpenCountriesEditor(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "production")
 	if err == nil || !strings.Contains(err.Error(), "could not find a way into") {
 		t.Errorf("err = %v, want no-entry error", err)
 	}
@@ -68,8 +56,8 @@ func TestOpenCountriesEditor_MissingTab(t *testing.T) {
 	f.setReply(openCountriesTabScript, false)
 	b := connectFake(t, f)
 
-	err := OpenCountriesEditor(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "production")
-	if err == nil || !strings.Contains(err.Error(), "tab was not found") {
+	err := OpenCountriesEditor(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "production")
+	if err == nil || !strings.Contains(err.Error(), "no Countries / regions tab was found") {
 		t.Errorf("err = %v, want missing-tab error", err)
 	}
 }
@@ -177,7 +165,7 @@ func TestDiscardCountries_NoEditsIsNoOp(t *testing.T) {
 func TestDiscardCountries_Discards(t *testing.T) {
 	f := newFakeChrome(t)
 	f.setReply(withCountryHelpers(discardCountriesClickScript), true)
-	f.setReply(`(() => !window.__gplayCountries.bar())()`, true)
+	f.setReply(countriesDiscardSettledScript, true)
 	b := connectFake(t, f)
 
 	if err := DiscardCountries(context.Background(), b); err != nil {

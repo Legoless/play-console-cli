@@ -215,9 +215,9 @@ Examples:
 
 			if shared.IsDryRun(ctx) {
 				if write {
-					fmt.Fprintf(os.Stderr, "[DRY RUN] would set declaration %s: package=%s\n", setKey, packageName) // #nosec G705 -- stderr log
+					fmt.Fprintf(os.Stderr, "[DRY RUN] would set declaration %s: package=%s\n", setKey, packageName)
 				} else {
-					fmt.Fprintf(os.Stderr, "[DRY RUN] would read declarations: package=%s\n", packageName) // #nosec G705 -- stderr log
+					fmt.Fprintf(os.Stderr, "[DRY RUN] would read declarations: package=%s\n", packageName)
 				}
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
@@ -237,7 +237,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 
 			result := &declarationsResult{PackageName: packageName}
 			if !write {
@@ -349,7 +349,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 			status, err := pb.ReadPolicyStatus(ctx, target.DeveloperID, target.AppID, sess.UserEmail)
 			if err != nil {
 				return err
@@ -416,7 +416,7 @@ Examples:
 			}
 
 			if shared.IsDryRun(ctx) {
-				fmt.Fprintf(os.Stderr, "[DRY RUN] would publish/manage: package=%s managed=%q confirm=%v\n", packageName, managedFlag, *confirm) // #nosec G705 -- stderr log
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would publish/manage: package=%s managed=%q confirm=%v\n", packageName, managedFlag, *confirm)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
 			}
@@ -435,7 +435,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 
 			result := &publishResult{PackageName: packageName}
 			if managedFlag != "" {

@@ -91,13 +91,13 @@ func OpenAppSettings(ctx context.Context, b *Browser, developerID, appID, accoun
 		return err
 	}
 	if !opened {
-		return fmt.Errorf("App category Edit button was missing or disabled")
+		return fmt.Errorf("the App category Edit button was missing or disabled")
 	}
 	editorReady := formHelpers + ` && ` + appSettingsHelpers +
 		` && !!window.__gplaySettings.dropdown('type-dropdown')` +
 		` && !!window.__gplaySettings.dropdown('category-dropdown')`
 	if err := b.EvalUntil(ctx, editorReady, 30*time.Second); err != nil {
-		return fmt.Errorf("App category editor did not open: %w", err)
+		return fmt.Errorf("the App category editor did not open: %w", err)
 	}
 	return nil
 }

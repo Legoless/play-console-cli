@@ -45,9 +45,5 @@ credentials*.json
 ROADMAP.md
 .worktrees/
 
-# Local agent tooling state
-.omc/
-.omx/
-
 # SDK reference docs (local only)
 docs/androidpublisher-v3-reference.md

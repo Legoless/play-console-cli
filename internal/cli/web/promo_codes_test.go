@@ -23,7 +23,7 @@ func stubPromoCodes(t *testing.T, fn promoCodesRunner) {
 func setupPromoCodes(t *testing.T, fn promoCodesRunner) {
 	t.Helper()
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, promoCodesMock(t, true))
 	stubPromoCodes(t, fn)
 }
@@ -42,7 +42,7 @@ func promoCodesMock(t *testing.T, accepted bool) *testutil.MockAPI {
 			_, _ = io.WriteString(w, authConsoleHTML)
 		},
 		"GET /v1/developers/" + authDeveloperID + "/appSummaries": func(w http.ResponseWriter, _ *http.Request) {
-			_, _ = io.WriteString(w, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`)
+			_, _ = io.WriteString(w, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.example.demo","16":"en-US"}]}`)
 		},
 		"GET /v1/developers/" + authDeveloperID + "/developersummaries": func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = io.WriteString(w, termsPayload)
@@ -127,7 +127,7 @@ func TestWebAppsPromoCodes_CreatesPaidAppPromotion(t *testing.T) {
 
 func TestWebAppsPromoCodes_FailsClosedWithoutAcceptedTerms(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, promoCodesMock(t, false))
 	called := false
 	stubPromoCodes(t, func(context.Context, string, string, string, string, bool, *webdriver.PaidAppPromotionForm) (*webdriver.PromotionsState, error) {

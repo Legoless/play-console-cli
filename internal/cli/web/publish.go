@@ -282,7 +282,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 
 			setup, err := pb.ReadSetup(ctx, target.DeveloperID, target.AppID, sess.UserEmail)
 			if err != nil {
@@ -401,7 +401,7 @@ testing track's numeric ID) — with the user's confirmation.
 
 Examples:
   gplay web apps availability --package com.example.app
-  gplay web apps availability --package com.example.app --track 4700073296470937262
+  gplay web apps availability --package com.example.app --track 1234567890
   gplay web apps availability --package com.example.app --countries "Slovenia,Austria" --confirm
   gplay web apps availability --package com.example.app --all-countries --confirm
   gplay --dry-run web apps availability --package com.example.app --all-countries --confirm`,
@@ -426,9 +426,9 @@ Examples:
 
 			if shared.IsDryRun(ctx) {
 				if write {
-					fmt.Fprintf(os.Stderr, "[DRY RUN] would set production countries: package=%s all=%v countries=%q\n", packageName, *allCountries, strings.Join(desired, ", ")) // #nosec G705 -- stderr log
+					fmt.Fprintf(os.Stderr, "[DRY RUN] would set production countries: package=%s all=%v countries=%q\n", packageName, *allCountries, strings.Join(desired, ", "))
 				} else {
-					fmt.Fprintf(os.Stderr, "[DRY RUN] would read production countries: package=%s\n", packageName) // #nosec G705 -- stderr log
+					fmt.Fprintf(os.Stderr, "[DRY RUN] would read production countries: package=%s\n", packageName)
 				}
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
@@ -449,7 +449,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 			if err := pb.OpenCountries(ctx, target.DeveloperID, target.AppID, sess.UserEmail, strings.TrimSpace(*track)); err != nil {
 				return err
 			}
@@ -613,9 +613,9 @@ Examples:
 
 			if shared.IsDryRun(ctx) {
 				if write {
-					fmt.Fprintf(os.Stderr, "[DRY RUN] would set app price: package=%s price=%s\n", packageName, requestedPrice) // #nosec G705 -- stderr log
+					fmt.Fprintf(os.Stderr, "[DRY RUN] would set app price: package=%s price=%s\n", packageName, requestedPrice)
 				} else {
-					fmt.Fprintf(os.Stderr, "[DRY RUN] would read app pricing: package=%s\n", packageName) // #nosec G705 -- stderr log
+					fmt.Fprintf(os.Stderr, "[DRY RUN] would read app pricing: package=%s\n", packageName)
 				}
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
@@ -636,7 +636,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 			if err := pb.OpenPricing(ctx, target.DeveloperID, target.AppID, sess.UserEmail); err != nil {
 				return err
 			}
@@ -752,7 +752,7 @@ Examples:
 			}
 
 			if shared.IsDryRun(ctx) {
-				fmt.Fprintf(os.Stderr, "[DRY RUN] would send pending changes for review: package=%s\n", packageName) // #nosec G705 -- stderr log
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would send pending changes for review: package=%s\n", packageName)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
 			}
@@ -772,7 +772,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 
 			overview, err := pb.ReadOverview(ctx, target.DeveloperID, target.AppID, sess.UserEmail)
 			if err != nil {
@@ -880,7 +880,7 @@ Examples:
 			}
 
 			if shared.IsDryRun(ctx) {
-				fmt.Fprintf(os.Stderr, "[DRY RUN] would roll out the production draft release: package=%s\n", packageName) // #nosec G705 -- stderr log
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would roll out the production draft release: package=%s\n", packageName)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
 			}
@@ -900,7 +900,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer pb.Close()
+			defer func() { _ = pb.Close() }() //nolint:errcheck // best-effort cleanup
 
 			if err := pb.OpenProductionReleases(ctx, target.DeveloperID, target.AppID, sess.UserEmail); err != nil {
 				return err

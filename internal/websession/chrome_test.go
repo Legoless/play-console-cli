@@ -41,8 +41,20 @@ func TestDecryptChromeValue_V24(t *testing.T) {
 	if _, err := decryptChromeValue(key, ".example.com", encrypted, 24); err == nil || !strings.Contains(err.Error(), "domain hash") {
 		t.Fatalf("wrong-domain error = %v, want domain hash error", err)
 	}
-	if _, err := decryptChromeValue(key, ".google.com", encrypted, 25); err == nil || !strings.Contains(err.Error(), "schema") {
-		t.Fatalf("newer-schema error = %v, want schema error", err)
+	// Newer schemas keep the v24 layout, so they must still decrypt.
+	if got, err := decryptChromeValue(key, ".google.com", encrypted, 25); err != nil || got != "sapisid-secret" {
+		t.Fatalf("schema 25 = %q, %v, want %q", got, err, "sapisid-secret")
+	}
+	if _, err := decryptChromeValue(key, ".google.com", encrypted, 23); err == nil || !strings.Contains(err.Error(), "schema") {
+		t.Fatalf("older-schema error = %v, want schema error", err)
+	}
+}
+
+func TestChromeBinary_EnvOverride(t *testing.T) {
+	t.Setenv(chromeBinaryEnv, "/custom/chrome")
+	got, err := chromeBinary()
+	if err != nil || got != "/custom/chrome" {
+		t.Fatalf("chromeBinary() = %q, %v, want /custom/chrome", got, err)
 	}
 }
 

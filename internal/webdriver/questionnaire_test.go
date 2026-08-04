@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-func questReadyExpr() string {
-	return formHelpers + ` && ` + questionnaireHelpers + ` && !!document.querySelector('[debug-id=stepper]')`
-}
-
 func TestReadQuestionnaireStep(t *testing.T) {
 	f := newFakeChrome(t)
 	f.setReply(readQuestionnaireStepScript, map[string]any{
@@ -57,20 +53,8 @@ func TestSetStepChoices_TogglesOnlyMismatches(t *testing.T) {
 		},
 	})
 	// checked-state waits after toggles.
-	f.setReply(`(() => {
-	  const w = document.querySelector('[debug-id="CHOICE_A"]');
-	  if (!w) return false;
-	  const input = w.querySelector('[role=checkbox], [role=radio], input[type=checkbox], input[type=radio]') || w;
-	  const checked = input.getAttribute('aria-checked') === 'true' || input.checked === true;
-	  return checked === false;
-	})()`, true)
-	f.setReply(`(() => {
-	  const w = document.querySelector('[debug-id="CHOICE_B"]');
-	  if (!w) return false;
-	  const input = w.querySelector('[role=checkbox], [role=radio], input[type=checkbox], input[type=radio]') || w;
-	  const checked = input.getAttribute('aria-checked') === 'true' || input.checked === true;
-	  return checked === true;
-	})()`, true)
+	f.setReply(choiceCheckedScript("CHOICE_A", false), true)
+	f.setReply(choiceCheckedScript("CHOICE_B", true), true)
 	b := connectFake(t, f)
 
 	if err := SetStepChoices(context.Background(), b, []string{"CHOICE_B"}); err != nil {
@@ -127,15 +111,9 @@ func TestImportDataSafetyCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && !!document.querySelector('[debug-id=button-import-csv]')`, true)
-	f.setReply(`(() => {
-	  const w = document.querySelector('[debug-id=button-import-csv]');
-	  const btn = w && (w.querySelector('button') || w);
-	  if (!btn || btn.disabled) return false;
-	  btn.click();
-	  return true;
-	})()`, true)
-	f.setReply(importDialogPresentScript+` && `+importDialogHasFileInputScript, true)
+	f.setReply(dataSafetyPageReadyScript, true)
+	f.setReply(importCSVClickScript, true)
+	f.setReply(importDialogReadyWait, true)
 	f.setDOMReply(t, "DOM.getDocument", map[string]any{"root": map[string]any{"nodeId": 1}})
 	f.setDOMReply(t, "DOM.querySelector", map[string]any{"nodeId": 2})
 	f.setDOMReply(t, "DOM.setFileInputFiles", map[string]any{})
@@ -143,7 +121,7 @@ func TestImportDataSafetyCSV(t *testing.T) {
 	f.setReply(importDialogGoneScript, true)
 	b := connectFake(t, f)
 
-	if err := ImportDataSafetyCSV(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", csv); err != nil {
+	if err := ImportDataSafetyCSV(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, csv); err != nil {
 		t.Fatalf("ImportDataSafetyCSV: %v", err)
 	}
 }

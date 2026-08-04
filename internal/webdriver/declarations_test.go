@@ -9,13 +9,11 @@ import (
 
 func TestReadDeclarations(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && !!document.querySelector('[debug-id=tab-strip]') &&
-	  !! [...document.querySelectorAll('[role=tab]')].find(t => /actioned/i.test(t.textContent))`, true)
-	f.setReply(`(/all caught up/i.test(document.body.innerText || '')) ||
-	  !!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`, true)
+	f.setReply(appContentReadyScript, true)
+	f.setReply(appContentLoadedScript, true)
 	f.setReply(readAttentionScript, []map[string]any{})
 	f.setReply(openActionedTabScript, true)
-	f.setReply(`!!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`, true)
+	f.setReply(actionedDeclarationsReadyScript, true)
 	f.setReply(readDeclarationsScript, map[string]any{
 		"actioned": []map[string]any{
 			{"key": "privacy-policy", "title": "Privacy policy", "lastEdited": "Jul 29, 2026"},
@@ -24,7 +22,7 @@ func TestReadDeclarations(t *testing.T) {
 	})
 	b := connectFake(t, f)
 
-	state, err := ReadDeclarations(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	state, err := ReadDeclarations(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadDeclarations: %v", err)
 	}
@@ -41,17 +39,15 @@ func TestReadDeclarations(t *testing.T) {
 
 func TestReadDeclarations_FlagsNeedingAttention(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && !!document.querySelector('[debug-id=tab-strip]') &&
-	  !! [...document.querySelectorAll('[role=tab]')].find(t => /actioned/i.test(t.textContent))`, true)
-	f.setReply(`(/all caught up/i.test(document.body.innerText || '')) ||
-	  !!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`, true)
+	f.setReply(appContentReadyScript, true)
+	f.setReply(appContentLoadedScript, true)
 	f.setReply(readAttentionScript, []map[string]any{{"key": "psl", "title": "Data safety", "needsAction": true}})
 	f.setReply(openActionedTabScript, true)
-	f.setReply(`!!document.querySelector('[debug-id^=policy-declaration-id-][debug-id$=-section]')`, true)
+	f.setReply(actionedDeclarationsReadyScript, true)
 	f.setReply(readDeclarationsScript, map[string]any{"actioned": []map[string]any{}})
 	b := connectFake(t, f)
 
-	state, err := ReadDeclarations(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	state, err := ReadDeclarations(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadDeclarations: %v", err)
 	}
@@ -60,19 +56,15 @@ func TestReadDeclarations_FlagsNeedingAttention(t *testing.T) {
 	}
 }
 
-func radioFormReadyExpr() string {
-	return declarationFormHelpers + ` && !!window.__gplayDecl.bar()`
-}
-
 func TestReadRadioDeclaration(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(radioFormReadyExpr(), true)
-	f.setReply(declarationFormHelpers+` && `+readRadioDeclarationScript, map[string]any{
+	f.setReply(declarationFormReadyScript, true)
+	f.setReply(readRadioDeclarationWait, map[string]any{
 		"answer": "no", "canSave": true,
 	})
 	b := connectFake(t, f)
 
-	state, err := ReadRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "government-apps")
+	state, err := ReadRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "government-apps")
 	if err != nil {
 		t.Fatalf("ReadRadioDeclaration: %v", err)
 	}
@@ -83,34 +75,24 @@ func TestReadRadioDeclaration(t *testing.T) {
 
 func TestSetRadioDeclaration(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(radioFormReadyExpr(), true)
-	f.setReply(declarationFormHelpers+` && (() => {
-  const r = window.__gplayDecl.radios();
-  if (r.length < 2) return 'no-radios';
-  r[1].click();
-  return 'clicked';
-})()`, "clicked")
-	f.setReply(declarationFormHelpers+` && (() => {
-  const r = window.__gplayDecl.radios();
-  if (r.length < 2) return false;
-  const c = r[1].getAttribute('aria-checked');
-  return c === 'true' || r[1].checked === true;
-})()`, true)
-	f.setReply(declarationFormHelpers+` && `+submitDeclarationClickScript, true)
+	f.setReply(declarationFormReadyScript, true)
+	f.setReply(radioClickScript(1), "clicked")
+	f.setReply(radioCheckedScript(1), true)
+	f.setReply(submitDeclarationClickWait, true)
 	f.setReply(declarationSaveSettledScript, true)
 	// The current answer is "yes"; after the save the persisted answer is "no".
-	f.setReply(declarationFormHelpers+` && `+readRadioDeclarationScript, map[string]any{
+	f.setReply(readRadioDeclarationWait, map[string]any{
 		"answer": "yes", "canSave": true,
 	})
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		f.setReply(declarationFormHelpers+` && `+readRadioDeclarationScript, map[string]any{
+		f.setReply(readRadioDeclarationWait, map[string]any{
 			"answer": "no", "canSave": true,
 		})
 	}()
 	b := connectFake(t, f)
 
-	changed, err := SetRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "government-apps", false)
+	changed, err := SetRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "government-apps", false)
 	if err != nil {
 		t.Fatalf("SetRadioDeclaration: %v", err)
 	}
@@ -121,13 +103,13 @@ func TestSetRadioDeclaration(t *testing.T) {
 
 func TestSetRadioDeclaration_NoOpWhenAlreadySet(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(radioFormReadyExpr(), true)
-	f.setReply(declarationFormHelpers+` && `+readRadioDeclarationScript, map[string]any{
+	f.setReply(declarationFormReadyScript, true)
+	f.setReply(readRadioDeclarationWait, map[string]any{
 		"answer": "no", "canSave": true,
 	})
 	b := connectFake(t, f)
 
-	changed, err := SetRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "government-apps", false)
+	changed, err := SetRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "government-apps", false)
 	if err != nil {
 		t.Fatalf("SetRadioDeclaration: %v", err)
 	}
@@ -138,27 +120,17 @@ func TestSetRadioDeclaration_NoOpWhenAlreadySet(t *testing.T) {
 
 func TestSetRadioDeclaration_ErrorsWhenNotSaved(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(radioFormReadyExpr(), true)
-	f.setReply(declarationFormHelpers+` && (() => {
-  const r = window.__gplayDecl.radios();
-  if (r.length < 2) return 'no-radios';
-  r[1].click();
-  return 'clicked';
-})()`, "clicked")
-	f.setReply(declarationFormHelpers+` && (() => {
-  const r = window.__gplayDecl.radios();
-  if (r.length < 2) return false;
-  const c = r[1].getAttribute('aria-checked');
-  return c === 'true' || r[1].checked === true;
-})()`, true)
-	f.setReply(declarationFormHelpers+` && `+submitDeclarationClickScript, true)
+	f.setReply(declarationFormReadyScript, true)
+	f.setReply(radioClickScript(1), "clicked")
+	f.setReply(radioCheckedScript(1), true)
+	f.setReply(submitDeclarationClickWait, true)
 	f.setReply(declarationSaveSettledScript, true)
-	f.setReply(declarationFormHelpers+` && `+readRadioDeclarationScript, map[string]any{
+	f.setReply(readRadioDeclarationWait, map[string]any{
 		"answer": "yes", "canSave": true,
 	})
 	b := connectFake(t, f)
 
-	_, err := SetRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", "government-apps", false)
+	_, err := SetRadioDeclaration(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, "government-apps", false)
 	if err == nil || !strings.Contains(err.Error(), "was not saved") {
 		t.Errorf("err = %v, want not-saved error", err)
 	}
@@ -166,13 +138,13 @@ func TestSetRadioDeclaration_ErrorsWhenNotSaved(t *testing.T) {
 
 func TestReadPolicyStatus_Empty(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(`!!document.querySelector('[debug-id=empty-state], [role=row]')`, true)
+	f.setReply(policyStatusReadyScript, true)
 	f.setReply(readPolicyStatusScript, map[string]any{
 		"state": "empty", "message": "Information about your compliance will be shown here after your app has been reviewed", "issues": []map[string]any{},
 	})
 	b := connectFake(t, f)
 
-	status, err := ReadPolicyStatus(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	status, err := ReadPolicyStatus(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadPolicyStatus: %v", err)
 	}
@@ -183,13 +155,13 @@ func TestReadPolicyStatus_Empty(t *testing.T) {
 
 func TestReadPolicyStatus_Issues(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(`!!document.querySelector('[debug-id=empty-state], [role=row]')`, true)
+	f.setReply(policyStatusReadyScript, true)
 	f.setReply(readPolicyStatusScript, map[string]any{
 		"state": "issues", "issues": []map[string]any{{"title": "Content rating", "detail": "Rejected | resubmit"}},
 	})
 	b := connectFake(t, f)
 
-	status, err := ReadPolicyStatus(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com")
+	status, err := ReadPolicyStatus(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount)
 	if err != nil {
 		t.Fatalf("ReadPolicyStatus: %v", err)
 	}
@@ -200,11 +172,11 @@ func TestReadPolicyStatus_Issues(t *testing.T) {
 
 func TestPublishApprovedChanges_NoAction(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && `+publishHelpers+` && !!document.querySelector('[debug-id=managed-publishing-dropdown]')`, true)
+	f.setReply(managedPublishingReadyScript, true)
 	f.setReply(publishNowClickScript, false)
 	b := connectFake(t, f)
 
-	err := PublishApprovedChanges(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", 300*time.Millisecond)
+	err := PublishApprovedChanges(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, 300*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "nothing to publish") {
 		t.Errorf("err = %v, want nothing-to-publish error", err)
 	}
@@ -212,15 +184,14 @@ func TestPublishApprovedChanges_NoAction(t *testing.T) {
 
 func TestPublishApprovedChanges_Confirms(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(formHelpers+` && `+publishHelpers+` && !!document.querySelector('[debug-id=managed-publishing-dropdown]')`, true)
+	f.setReply(managedPublishingReadyScript, true)
 	f.setReply(publishNowClickScript, true)
 	f.setReply(sendForReviewDialogPresentScript, true)
 	f.setReply(sendForReviewConfirmScript, "confirmed")
-	f.setReply(`(() => ![...document.querySelectorAll('button')].find(b =>
-	  b.getClientRects().length && /^publish/i.test(b.textContent.trim()))())()`, true)
+	f.setReply(publishSettledScript, true)
 	b := connectFake(t, f)
 
-	if err := PublishApprovedChanges(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com", 2*time.Second); err != nil {
+	if err := PublishApprovedChanges(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount, 2*time.Second); err != nil {
 		t.Fatalf("PublishApprovedChanges: %v", err)
 	}
 }

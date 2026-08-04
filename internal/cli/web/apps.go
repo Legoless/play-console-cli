@@ -30,7 +30,12 @@ These commands use the browser-session auth from "gplay web auth login" for
 Play Console capabilities that the official Android Publisher API does not
 provide, including listing and creating apps, changing App category, setting
 country availability, managing form-factor distribution and promo codes, and
-reading content-rating state.`,
+reading content-rating state.
+
+Every subcommand except "list" drives a local Google Chrome window, which gplay
+locates automatically on macOS only. On Linux and Windows, set
+GPLAY_CHROME_BINARY to the Chrome executable path; those platforms are
+untested.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -103,7 +108,7 @@ All pages are fetched automatically.
 Examples:
   gplay web apps list
   gplay web apps list --output table
-  gplay web apps list --developer 6901885972034847549`,
+  gplay web apps list --developer 1234567890`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -278,7 +283,7 @@ Examples:
 			}
 
 			if shared.IsDryRun(ctx) {
-				fmt.Fprintf(os.Stderr, "[DRY RUN] would create app: name=%q package=%s language=%s kind=%s paid=%t\n", // #nosec G705 -- stderr log
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would create app: name=%q package=%s language=%s kind=%s paid=%t\n",
 					req.Title, req.PackageName, req.DefaultLanguage, req.Kind, req.Paid)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
@@ -315,7 +320,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer creator.Close()
+			defer func() { _ = creator.Close() }() //nolint:errcheck // best-effort cleanup
 
 			form := webdriver.AppForm{
 				Title:       req.Title,
@@ -383,7 +388,7 @@ func resolveWebApp(ctx context.Context, client webRPCClient, developerFlag, pack
 			target.DeveloperID = developer
 		}
 		if target.AppID == "" {
-			return nil, fmt.Errorf("Play Console did not return an app ID for package %s", packageName)
+			return nil, fmt.Errorf("no app ID returned by Play Console for package %s", packageName)
 		}
 		return target, nil
 	}
@@ -500,7 +505,7 @@ Examples:
 			}
 
 			if shared.IsDryRun(ctx) {
-				fmt.Fprintf(os.Stderr, "[DRY RUN] would update app: package=%s kind=%s category=%q\n", packageName, requestedKind, requestedCategory) // #nosec G705 -- stderr log
+				fmt.Fprintf(os.Stderr, "[DRY RUN] would update app: package=%s kind=%s category=%q\n", packageName, requestedKind, requestedCategory)
 				fmt.Fprintln(os.Stderr, "[DRY RUN] No changes were made.")
 				return nil
 			}
@@ -521,7 +526,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer updater.Close()
+			defer func() { _ = updater.Close() }() //nolint:errcheck // best-effort cleanup
 
 			if err := updater.Open(ctx, target.DeveloperID, target.AppID, sess.UserEmail); err != nil {
 				return err
@@ -566,7 +571,7 @@ Examples:
 				return err
 			}
 			if saved.Kind != requestedKind || !strings.EqualFold(saved.Category, requestedCategory) {
-				return fmt.Errorf("App category was not saved (got kind=%q category=%q, want kind=%q category=%q)",
+				return fmt.Errorf("the App category was not saved (got kind=%q category=%q, want kind=%q category=%q)",
 					saved.Kind, saved.Category, requestedKind, requestedCategory)
 			}
 			result.Kind = saved.Kind

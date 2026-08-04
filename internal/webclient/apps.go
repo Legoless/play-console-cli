@@ -81,7 +81,7 @@ func (c *Client) apiKey(ctx context.Context) (string, error) {
 	}
 	c.appsAPIKey = strings.TrimSpace(data.Boot.APIKey)
 	if c.appsAPIKey == "" {
-		return "", fmt.Errorf("Play Console API key not found in startupData; set %s to override", appsAPIKeyEnv)
+		return "", fmt.Errorf("no Play Console API key found in startupData; set %s to override", appsAPIKeyEnv)
 	}
 	return c.appsAPIKey, nil
 }

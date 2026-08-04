@@ -41,6 +41,19 @@ const rolloutHelpers = `
 })()
 `
 
+// The rollout flow walks three pages; each has its own ready condition.
+const releasesTabReadyScript = formHelpers + ` && ` + rolloutHelpers +
+	` && !! [...document.querySelectorAll('[role=tab]')].find(t => /^releases$/i.test(t.textContent.trim()))`
+
+const draftReleaseReadyScript = formHelpers + ` && ` + rolloutHelpers +
+	` && !!window.__gplayRollout.editDraftButton()`
+
+const preparePageReadyScript = formHelpers + ` && ` + rolloutHelpers +
+	` && !!window.__gplayRollout.nextButton()`
+
+const reviewPageReadyScript = formHelpers + ` && ` + rolloutHelpers +
+	` && !!window.__gplayRollout.saveButton()`
+
 const openReleasesTabScript = `(() => {
   const tab = [...document.querySelectorAll('[role=tab]')].find(t => /^releases$/i.test(t.textContent.trim()));
   if (!tab) return false;
@@ -56,20 +69,17 @@ func OpenProductionReleases(ctx context.Context, b *Browser, developerID, appID,
 	if err := b.Navigate(ctx, productionTrackURL(developerID, appID, account)); err != nil {
 		return err
 	}
-	tabReady := formHelpers + ` && ` + rolloutHelpers +
-		` && !! [...document.querySelectorAll('[role=tab]')].find(t => /^releases$/i.test(t.textContent.trim()))`
-	if err := b.EvalUntil(ctx, tabReady, 60*time.Second); err != nil {
-		return fmt.Errorf("production track page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, releasesTabReadyScript, 60*time.Second); err != nil {
+		return fmt.Errorf("the production track page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var opened bool
 	if err := b.Eval(ctx, openReleasesTabScript, &opened); err != nil {
 		return err
 	}
 	if !opened {
-		return fmt.Errorf("Releases tab was not found on the production track page")
+		return fmt.Errorf("no Releases tab was found on the production track page")
 	}
-	draftReady := formHelpers + ` && ` + rolloutHelpers + ` && !!window.__gplayRollout.editDraftButton()`
-	if err := b.EvalUntil(ctx, draftReady, rolloutDraftTimeout); err != nil {
+	if err := b.EvalUntil(ctx, draftReleaseReadyScript, rolloutDraftTimeout); err != nil {
 		return fmt.Errorf("no draft release found on the production track: %w", err)
 	}
 	return nil
@@ -101,9 +111,8 @@ func OpenDraftRelease(ctx context.Context, b *Browser) (*PrepareState, error) {
 	if !clicked {
 		return nil, fmt.Errorf(`"Edit release" button was missing or disabled`)
 	}
-	prepareReady := formHelpers + ` && ` + rolloutHelpers + ` && !!window.__gplayRollout.nextButton()`
-	if err := b.EvalUntil(ctx, prepareReady, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("release prepare page did not load: %w", err)
+	if err := b.EvalUntil(ctx, preparePageReadyScript, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the release prepare page did not load: %w", err)
 	}
 	var state PrepareState
 	if err := b.Eval(ctx, readPrepareScript, &state); err != nil {
@@ -144,9 +153,8 @@ func ReviewDraftRelease(ctx context.Context, b *Browser) (*ReviewState, error) {
 	if !clicked {
 		return nil, fmt.Errorf(`"Next" button was missing or disabled`)
 	}
-	reviewReady := formHelpers + ` && ` + rolloutHelpers + ` && !!window.__gplayRollout.saveButton()`
-	if err := b.EvalUntil(ctx, reviewReady, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("release review page did not load: %w", err)
+	if err := b.EvalUntil(ctx, reviewPageReadyScript, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the release review page did not load: %w", err)
 	}
 	var state ReviewState
 	if err := b.Eval(ctx, readReviewScript, &state); err != nil {

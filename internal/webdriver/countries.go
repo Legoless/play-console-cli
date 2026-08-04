@@ -20,7 +20,7 @@ func trackCountriesURL(developerID, appID, account, track string) string {
 }
 
 // countriesHelpers installs country-table lookups in the page. The console
-// renders one mat-checkbox per country/region row, labelled by the country
+// renders one mat-checkbox per country/region row, labeled by the country
 // name, plus a "Select all rows" header checkbox. Selection state lives in
 // aria-checked. The Save/Discard controls sit in the page-level publishing
 // bottom bar, exactly like the Store settings editor.
@@ -46,6 +46,14 @@ const countriesHelpers = `
   return true;
 })()
 `
+
+const countriesTabReadyScript = formHelpers + ` && ` + countriesHelpers +
+	` && !! [...document.querySelectorAll('[role=tab]')].find(t => /countries/i.test(t.textContent))`
+
+const countriesEditorReadyScript = formHelpers + ` && ` + countriesHelpers +
+	` && !!(document.querySelector('[debug-id=empty-state-include-button]') ||
+	  document.querySelector('[debug-id=edit-countries-button]') ||
+	  window.__gplayCountries.boxes().length > 0)`
 
 const openCountriesTabScript = `(() => {
   const tab = [...document.querySelectorAll('[role=tab]')].find(t => /countries/i.test(t.textContent));
@@ -78,24 +86,18 @@ func OpenCountriesEditor(ctx context.Context, b *Browser, developerID, appID, ac
 	if err := b.Navigate(ctx, trackCountriesURL(developerID, appID, account, track)); err != nil {
 		return err
 	}
-	tabReady := formHelpers + ` && ` + countriesHelpers +
-		` && !! [...document.querySelectorAll('[role=tab]')].find(t => /countries/i.test(t.textContent))`
-	if err := b.EvalUntil(ctx, tabReady, 60*time.Second); err != nil {
-		return fmt.Errorf("track page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, countriesTabReadyScript, 60*time.Second); err != nil {
+		return fmt.Errorf("the track page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var opened bool
 	if err := b.Eval(ctx, openCountriesTabScript, &opened); err != nil {
 		return err
 	}
 	if !opened {
-		return fmt.Errorf("Countries / regions tab was not found on the track page")
+		return fmt.Errorf("no Countries / regions tab was found on the track page")
 	}
-	editorReady := formHelpers + ` && ` + countriesHelpers +
-		` && !!(document.querySelector('[debug-id=empty-state-include-button]') ||
-		  document.querySelector('[debug-id=edit-countries-button]') ||
-		  window.__gplayCountries.boxes().length > 0)`
-	if err := b.EvalUntil(ctx, editorReady, 30*time.Second); err != nil {
-		return fmt.Errorf("Countries / regions section did not load: %w", err)
+	if err := b.EvalUntil(ctx, countriesEditorReadyScript, 30*time.Second); err != nil {
+		return fmt.Errorf("the Countries / regions section did not load: %w", err)
 	}
 	var result string
 	if err := b.Eval(ctx, openCountriesEditorScript, &result); err != nil {
@@ -300,6 +302,8 @@ const discardCountriesClickScript = `(() => {
   return true;
 })()`
 
+const countriesDiscardSettledScript = `(() => !window.__gplayCountries.bar())()`
+
 // DiscardCountries leaves the editor without saving.
 func DiscardCountries(ctx context.Context, b *Browser) error {
 	var clicked bool
@@ -309,8 +313,7 @@ func DiscardCountries(ctx context.Context, b *Browser) error {
 	if !clicked {
 		return nil // no pending edits, nothing to discard
 	}
-	settled := `(() => !window.__gplayCountries.bar())()`
-	if err := b.EvalUntil(ctx, settled, 15*time.Second); err != nil {
+	if err := b.EvalUntil(ctx, countriesDiscardSettledScript, 15*time.Second); err != nil {
 		return fmt.Errorf("discarding country edits did not complete: %w", err)
 	}
 	return nil

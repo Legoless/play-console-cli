@@ -43,10 +43,8 @@ func TestDir_EnvOverride(t *testing.T) {
 
 func TestDir_Default(t *testing.T) {
 	t.Setenv(dirEnvVar, "")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home dir")
-	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	want := filepath.Join(home, ".gplay", "web")
 	if Dir() != want {
 		t.Errorf("Dir() = %q, want %q", Dir(), want)

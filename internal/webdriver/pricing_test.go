@@ -7,42 +7,27 @@ import (
 	"time"
 )
 
-func pricingWizardDoneScript() string {
-	return formHelpers + ` && ` + pricingHelpers + ` && (() => {
-	  const p = window.__gplayPricing;
-	  return p.staged() && p.enabled(p.saveButton()) && p.pricesSet();
-	})()`
-}
-
-func pricingStagedScript() string {
-	return formHelpers + ` && ` + pricingHelpers + ` && window.__gplayPricing.staged()`
-}
-
 func withPricingHelpers(script string) string {
 	return formHelpers + ` && ` + pricingHelpers + ` && ` + script
 }
 
 func TestAppPricingURL(t *testing.T) {
-	got := appPricingURL(publishingTestDeveloper, publishingTestApp, "dal@unifiedsense.com")
-	want := "https://play.google.com/console/developers/6901885972034847549/app/4974539508825146246/paid-app?authuser=dal%40unifiedsense.com&hl=en"
+	got := appPricingURL(publishingTestDeveloper, publishingTestApp, testAccount)
+	want := "https://play.google.com/console/developers/1234567890/app/9876543210/paid-app?authuser=me%40example.com&hl=en"
 	if got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
 }
 
-func pricingOpenReadyExpr() string {
-	return formHelpers + ` && ` + pricingHelpers + ` && !!window.__gplayPricing.setPricingButton()`
-}
-
 func TestOpenAndReadAppPricing(t *testing.T) {
 	f := newFakeChrome(t)
-	f.setReply(pricingOpenReadyExpr(), true)
+	f.setReply(pricingPageReadyScript, true)
 	f.setReply(readAppPricingScript, map[string]any{
 		"priceType": "paid", "pricesSet": false, "canSave": false,
 	})
 	b := connectFake(t, f)
 
-	if err := OpenAppPricing(context.Background(), b, publishingTestDeveloper, publishingTestApp, "me@example.com"); err != nil {
+	if err := OpenAppPricing(context.Background(), b, publishingTestDeveloper, publishingTestApp, testAccount); err != nil {
 		t.Fatalf("OpenAppPricing: %v", err)
 	}
 	state, err := ReadAppPricing(context.Background(), b)
@@ -56,11 +41,11 @@ func TestOpenAndReadAppPricing(t *testing.T) {
 
 func scriptPricingWizard(t *testing.T, f *fakeChrome) {
 	t.Helper()
-	f.setReply(pricingStagedScript(), false)
+	f.setReply(pricingStagedScript, false)
 	f.setReply(withPricingHelpers(setPricingClickScript), true)
-	f.setReply(`!!document.querySelector('mat-checkbox[aria-label="Select all rows"]')`, true)
+	f.setReply(pricingCountryTableReadyScript, true)
 	f.setReply(pricingSelectAllScript, "clicked")
-	f.setReply(`(() => /\d+ countries \/ regions selected/i.test(document.body.innerText))()`, true)
+	f.setReply(pricingSelectionCountedScript, true)
 	f.setReply(pricingContinueEnabledScript, true)
 	f.setReply(pricingContinueClickScript, true)
 	f.setReply(priceInputReadyScript, true)
@@ -68,7 +53,7 @@ func scriptPricingWizard(t *testing.T, f *fakeChrome) {
 	f.setReply(priceTypedHeldScript("69.99"), true)
 	f.setReply(pricingUpdateClickScript, true)
 	f.setReply(pricingDialogGoneScript, true)
-	f.setReply(pricingWizardDoneScript(), true)
+	f.setReply(pricingWizardDoneScript, true)
 }
 
 func TestSetAppPrice(t *testing.T) {
@@ -132,7 +117,7 @@ func TestSetAppPrice_ErrorsWhenInputNotFocusable(t *testing.T) {
 func TestSetAppPrice_ErrorsWhenPricesNotFilled(t *testing.T) {
 	f := newFakeChrome(t)
 	scriptPricingWizard(t, f)
-	f.setReply(pricingWizardDoneScript(), false)
+	f.setReply(pricingWizardDoneScript, false)
 	b := connectFake(t, f)
 	shortenPricingTimeouts(t)
 
@@ -204,7 +189,7 @@ func TestDiscardAppPricing_NoEditorIsNoOp(t *testing.T) {
 func TestDiscardAppPricing_CancelsBar(t *testing.T) {
 	f := newFakeChrome(t)
 	f.setReply(withPricingHelpers(discardPricingClickScript), "bar")
-	f.setReply(formHelpers+` && `+pricingHelpers+` && !window.__gplayPricing.staged()`, true)
+	f.setReply(pricingUnstagedScript, true)
 	b := connectFake(t, f)
 
 	if err := DiscardAppPricing(context.Background(), b); err != nil {

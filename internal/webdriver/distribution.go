@@ -43,6 +43,29 @@ const distributionHelpers = `
 })()
 `
 
+const distributionPageReadyScript = formHelpers + ` && ` + distributionHelpers +
+	` && !!window.__gplayDist.tabButton('Form factors')`
+
+const formFactorsReadyScript = `!!document.querySelector('[debug-id=manage], [debug-id=text-button]')`
+
+const addFormFactorClickScript = formHelpers + ` && ` + distributionHelpers + ` && (() => {
+  const btn = window.__gplayDist.addButton();
+  if (!btn) return false;
+  btn.click();
+  return true;
+})()`
+
+// selectFormFactorScript picks a named option out of the opened Add form
+// factor menu.
+func selectFormFactorScript(factor string) string {
+	return distributionHelpers + ` && (() => {
+  const item = window.__gplayDist.menuItem(` + jsString(factor) + `);
+  if (!item) return 'missing';
+  item.click();
+  return 'clicked';
+})()`
+}
+
 const openFormFactorsTabScript = `(() => {
   const tab = window.__gplayDist.tabButton('Form factors');
   if (!tab) return false;
@@ -70,19 +93,18 @@ func ReadDistribution(ctx context.Context, b *Browser, developerID, appID, accou
 	if err := b.Navigate(ctx, advancedDistributionURL(developerID, appID, account)); err != nil {
 		return nil, err
 	}
-	ready := formHelpers + ` && ` + distributionHelpers + ` && !!window.__gplayDist.tabButton('Form factors')`
-	if err := b.EvalUntil(ctx, ready, 60*time.Second); err != nil {
-		return nil, fmt.Errorf("Advanced settings page did not load (is the gplay browser profile signed in?): %w", err)
+	if err := b.EvalUntil(ctx, distributionPageReadyScript, 60*time.Second); err != nil {
+		return nil, fmt.Errorf("the Advanced settings page did not load (is the gplay browser profile signed in?): %w", err)
 	}
 	var opened bool
 	if err := b.Eval(ctx, openFormFactorsTabScript, &opened); err != nil {
 		return nil, err
 	}
 	if !opened {
-		return nil, fmt.Errorf("Form factors tab was not found")
+		return nil, fmt.Errorf("no Form factors tab was found")
 	}
-	if err := b.EvalUntil(ctx, `!!document.querySelector('[debug-id=manage], [debug-id=text-button]')`, 30*time.Second); err != nil {
-		return nil, fmt.Errorf("Form factors page did not load: %w", err)
+	if err := b.EvalUntil(ctx, formFactorsReadyScript, 30*time.Second); err != nil {
+		return nil, fmt.Errorf("the Form factors page did not load: %w", err)
 	}
 	var state DistributionState
 	if err := b.Eval(ctx, readDistributionScript, &state); err != nil {
@@ -105,12 +127,7 @@ func AddFormFactor(ctx context.Context, b *Browser, factor string) error {
 		return fmt.Errorf("form factor name is required")
 	}
 	var clicked bool
-	if err := b.Eval(ctx, formHelpers+` && `+distributionHelpers+` && (() => {
-	  const btn = window.__gplayDist.addButton();
-	  if (!btn) return false;
-	  btn.click();
-	  return true;
-	})()`, &clicked); err != nil {
+	if err := b.Eval(ctx, addFormFactorClickScript, &clicked); err != nil {
 		return err
 	}
 	if !clicked {
@@ -119,14 +136,8 @@ func AddFormFactor(ctx context.Context, b *Browser, factor string) error {
 	if err := b.EvalUntil(ctx, distributionMenuPresentScript, 15*time.Second); err != nil {
 		return fmt.Errorf("the form factor menu did not open: %w", err)
 	}
-	selectScript := distributionHelpers + ` && (() => {
-	  const item = window.__gplayDist.menuItem(` + jsString(factor) + `);
-	  if (!item) return 'missing';
-	  item.click();
-	  return 'clicked';
-	})()`
 	var result string
-	if err := b.Eval(ctx, selectScript, &result); err != nil {
+	if err := b.Eval(ctx, selectFormFactorScript(factor), &result); err != nil {
 		return err
 	}
 	if result == "missing" {
