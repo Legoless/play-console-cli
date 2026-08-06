@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [GitHub Releases](https://github.com/tamtom/play-console-cli/releases).
 
 
-## [Unreleased]
+## [0.8.1] - 2026-08-06
 
 ### Fixed
 
