@@ -16,11 +16,11 @@ import (
 	"github.com/tamtom/play-console-cli/internal/websession"
 )
 
-// saveWebSession stores a minimal valid session for the given account.
-func saveWebSession(t *testing.T, email string) {
+// saveWebSession stores a minimal valid session for the test account.
+func saveWebSession(t *testing.T) {
 	t.Helper()
 	if err := websession.Save(&websession.Session{
-		UserEmail: email,
+		UserEmail: "me@example.com",
 		Cookies:   map[string][]websession.Cookie{playOrigin: {{Name: "SAPISID", Value: "v"}}},
 	}); err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func appsListMock(t *testing.T, payload string) *testutil.MockAPI {
 
 func TestWebAppsList_Executes(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
 
 	cmd := WebAppsListCommand()
@@ -87,7 +87,7 @@ func TestWebAppsList_RegisteredInGroup(t *testing.T) {
 
 func TestWebAppsList_TableOutput(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, appsListMock(t, `{"1":[{"1":{"1":{"1":"`+authDeveloperID+`"},"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach","16":"en-US"}]}`))
 
 	cmd := WebAppsListCommand()
@@ -109,7 +109,7 @@ func TestWebAppsList_TableOutput(t *testing.T) {
 }
 
 // expiringAppsMock rejects the first app-list request with 403 and serves the
-// second, modelling a session that expires between runs.
+// second, modeling a session that expires between runs.
 func expiringAppsMock(t *testing.T, payload string) *testutil.MockAPI {
 	t.Helper()
 	calls := 0
@@ -134,7 +134,7 @@ func expiringAppsMock(t *testing.T, payload string) *testutil.MockAPI {
 
 func TestWebAppsList_RefreshesExpiredSessionFromBrowserProfile(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, expiringAppsMock(t, `{"1":[{"1":{"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach"}]}`))
 	launches, _ := stubBrowserSeams(t, validBrowserCookies())
 
@@ -156,7 +156,7 @@ func TestWebAppsList_RefreshesExpiredSessionFromBrowserProfile(t *testing.T) {
 
 func TestWebAppsList_ExpiredWithNoBrowserProfileReportsAuthError(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	mockWebClient(t, expiringAppsMock(t, `{"1":[]}`))
 	stubBrowserSeams(t, nil) // profile unusable
 
@@ -192,17 +192,17 @@ func createMock(t *testing.T, availability string, order *[]string) *testutil.Mo
 	})
 }
 
-func createArgs(extra ...string) []string {
-	return append([]string{
+func createArgs() []string {
+	return []string{
 		"--name", "Matisse", "--package", "com.unifiedsense.matisse",
 		"--kind", "app", "--pricing", "free",
 		"--accept-policies", "--accept-us-export-laws", "--confirm",
-	}, extra...)
+	}
 }
 
 func TestWebAppsCreate_AbortsWhenPackageTaken(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":4}`, &order))
 
@@ -223,7 +223,7 @@ func TestWebAppsCreate_AbortsWhenPackageTaken(t *testing.T) {
 
 func TestWebAppsCreate_RequiresDeclarations(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	cmd := WebAppsCreateCommand()
 	args := []string{"--name", "Matisse", "--package", "com.x", "--kind", "app", "--pricing", "free", "--confirm"}
 	if err := cmd.FlagSet.Parse(args); err != nil {
@@ -238,8 +238,10 @@ func TestWebAppsCreate_RequiresDeclarations(t *testing.T) {
 func TestWebAppsCreate_RequiresConfirm(t *testing.T) {
 	useTempSessionDir(t)
 	cmd := WebAppsCreateCommand()
-	args := []string{"--name", "M", "--package", "com.x", "--kind", "app", "--pricing", "free",
-		"--accept-policies", "--accept-us-export-laws"}
+	args := []string{
+		"--name", "M", "--package", "com.x", "--kind", "app", "--pricing", "free",
+		"--accept-policies", "--accept-us-export-laws",
+	}
 	if err := cmd.FlagSet.Parse(args); err != nil {
 		t.Fatal(err)
 	}
@@ -264,8 +266,10 @@ func TestWebAppsCreate_DryRunSkipsNetwork(t *testing.T) {
 func TestWebAppsCreate_ValidatesPackageName(t *testing.T) {
 	useTempSessionDir(t)
 	cmd := WebAppsCreateCommand()
-	if err := cmd.FlagSet.Parse([]string{"--name", "M", "--kind", "app", "--pricing", "free",
-		"--accept-policies", "--accept-us-export-laws", "--confirm"}); err != nil {
+	if err := cmd.FlagSet.Parse([]string{
+		"--name", "M", "--kind", "app", "--pricing", "free",
+		"--accept-policies", "--accept-us-export-laws", "--confirm",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	err := cmd.Exec(context.Background(), nil)
@@ -323,7 +327,7 @@ func goodState() webdriver.FormState {
 
 func TestWebAppsCreate_DrivesBrowserForm(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":1}`, &order))
 	f := &fakeCreator{state: goodState(), appID: "4975550726849737454"}
@@ -354,7 +358,7 @@ func TestWebAppsCreate_DrivesBrowserForm(t *testing.T) {
 
 func TestWebAppsCreate_RefusesToSubmitMismatchedForm(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":1}`, &order))
 	bad := goodState()
@@ -379,7 +383,7 @@ func TestWebAppsCreate_RefusesToSubmitMismatchedForm(t *testing.T) {
 
 func TestWebAppsCreate_RefusesWhenSubmitDisabled(t *testing.T) {
 	useTempSessionDir(t)
-	saveWebSession(t, "me@example.com")
+	saveWebSession(t)
 	var order []string
 	mockWebClient(t, createMock(t, `{"1":1}`, &order))
 	st := goodState()

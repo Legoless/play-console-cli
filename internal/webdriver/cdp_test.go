@@ -108,7 +108,7 @@ func TestConnectAndEval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	var got int
 	if err := b.Eval(context.Background(), "1+1", &got); err != nil {
@@ -128,7 +128,7 @@ func TestEval_SurfacesPageException(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	err = b.Eval(context.Background(), "boom()", nil)
 	if err == nil || !strings.Contains(err.Error(), "ReferenceError") {
@@ -145,7 +145,7 @@ func TestEvalUntil_WaitsForTrue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	// Flip the answer once polling has started.
 	go func() {
@@ -166,7 +166,7 @@ func TestEvalUntil_TimesOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 
 	err = b.EvalUntil(context.Background(), "never", 400*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
@@ -260,7 +260,7 @@ func TestSubmitAppForm_ErrorsWhenButtonDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }() //nolint:errcheck // read-path close
 	// The fake returns nil (false) for the click expression.
 	_, err = SubmitAppForm(context.Background(), b, 300*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "Create app") {

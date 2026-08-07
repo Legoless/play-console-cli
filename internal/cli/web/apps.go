@@ -148,9 +148,11 @@ type browserCreator struct{ b *webdriver.Browser }
 func (c browserCreator) Fill(ctx context.Context, developerID string, form webdriver.AppForm) error {
 	return webdriver.FillAppForm(ctx, c.b, developerID, form)
 }
+
 func (c browserCreator) Read(ctx context.Context) (*webdriver.FormState, error) {
 	return webdriver.ReadForm(ctx, c.b)
 }
+
 func (c browserCreator) Submit(ctx context.Context, timeout time.Duration) (string, error) {
 	return webdriver.SubmitAppForm(ctx, c.b, timeout)
 }
@@ -291,7 +293,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer creator.Close()
+			defer func() { _ = creator.Close() }() //nolint:errcheck // best-effort cleanup
 
 			form := webdriver.AppForm{
 				Title:       req.Title,
