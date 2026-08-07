@@ -39,7 +39,7 @@ var (
 	sessionDelete           = websession.Delete
 	sessionDeleteAll        = websession.DeleteAll
 	sessionList             = websession.List
-	sessionPathFor          = websession.SessionFile
+	sessionStore            = websession.Store
 	importChromeCookies     = websession.ImportChromeCookies
 	importChromeCookiesFrom = websession.ImportChromeCookiesFrom
 	chromeLauncher          = websession.LaunchChrome
@@ -67,7 +67,9 @@ from a signed-in browser. This is SEPARATE from "gplay auth" service accounts
 and is required only for commands the official Android Publisher API does not
 support (such as listing every app in a developer account).
 
-Sessions are stored per account under ~/.gplay/web/ with 0600 permissions.
+Sessions are stored per account: in the macOS Keychain on macOS (cookies
+never touch disk), or as files with 0600 permissions under ~/.gplay/web/
+when GPLAY_WEB_SESSION_DIR is set or on other platforms.
 Cookies are secrets: treat them like passwords and never commit them.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -122,6 +124,9 @@ Alternatively paste a JSON export from a cookie manager extension
 (Cookie-Editor, EditThisCookie); the format is auto-detected.
 
 The session is validated against the real Play Console before it is saved.
+On macOS it is stored in the macOS Keychain (service "gplay web session");
+with GPLAY_WEB_SESSION_DIR set, or on other platforms, as a 0600 file under
+~/.gplay/web/ instead.
 
 Examples:
   gplay web auth login --email me@example.com
@@ -185,7 +190,6 @@ Examples:
 			if err := sessionSave(sess); err != nil {
 				return err
 			}
-			path, _ := sessionPathFor(email)
 
 			cookieCount := 0
 			origins := make([]string, 0, len(byOrigin))
@@ -200,7 +204,7 @@ Examples:
 				"developer_id":  developerID,
 				"cookie_count":  cookieCount,
 				"origins":       origins,
-				"session_file":  path,
+				"session_store": sessionStore(email),
 				"validated":     true,
 				"validated_utc": time.Now().UTC().Format(time.RFC3339),
 			}, *outputFlag, *pretty)
@@ -231,17 +235,17 @@ func AuthStatusCommand() *ffcli.Command {
 			}
 
 			type entry struct {
-				Email       string `json:"email"`
-				UpdatedAt   string `json:"updated_at,omitempty"`
-				SessionFile string `json:"session_file,omitempty"`
-				Status      string `json:"status,omitempty"`
+				Email        string `json:"email"`
+				UpdatedAt    string `json:"updated_at,omitempty"`
+				SessionStore string `json:"session_store,omitempty"`
+				Status       string `json:"status,omitempty"`
 			}
 			entries := make([]entry, 0, len(emails))
 			for _, email := range emails {
 				e := entry{Email: email}
 				if sess, err := sessionLoad(email); err == nil {
 					e.UpdatedAt = sess.UpdatedAt.UTC().Format(time.RFC3339)
-					e.SessionFile, _ = sessionPathFor(email)
+					e.SessionStore = sessionStore(email)
 					if *check {
 						client := newWebClient(sess)
 						cctx, cancel := shared.ContextWithTimeout(ctx, nil)

@@ -1,7 +1,9 @@
-// Package websession manages browser-session files for the "gplay web"
-// command family. Sessions hold cookies captured from a signed-in browser
-// and are stored per account under ~/.gplay/web/ (override with
-// GPLAY_WEB_SESSION_DIR). They are deliberately kept out of the regular
+// Package websession manages browser-session storage for the "gplay web"
+// command family. Sessions hold cookies captured from a signed-in browser.
+// On macOS they live in the Keychain (service "gplay web session") and only
+// metadata (last.json, index.json) is kept under ~/.gplay/web/; setting
+// GPLAY_WEB_SESSION_DIR, or running on another platform, stores per-account
+// session files there instead. They are deliberately kept out of the regular
 // gplay config profiles.
 package websession
 
@@ -75,8 +77,9 @@ func lastPath() string {
 	return filepath.Join(Dir(), "last.json")
 }
 
-// Save writes the session to disk (0600), keeping any previous file as a
-// .bak sibling, and updates the last-session pointer.
+// Save stores the session: in the macOS Keychain by default on macOS, or as
+// a 0600 file under Dir() when GPLAY_WEB_SESSION_DIR is set or on other
+// platforms. Either way it updates the last-session pointer.
 func Save(s *Session) error {
 	if s == nil {
 		return fmt.Errorf("session is nil")
@@ -95,6 +98,15 @@ func Save(s *Session) error {
 	s.Version = sessionVersion
 	s.UpdatedAt = time.Now().UTC()
 
+	if useKeychain() {
+		return saveKeychain(s)
+	}
+	return saveFile(s)
+}
+
+// saveFile writes the session to disk (0600), keeping any previous file as a
+// .bak sibling, and updates the last-session pointer.
+func saveFile(s *Session) error {
 	key := AccountKey(s.UserEmail)
 	path := sessionPath(key)
 
@@ -112,23 +124,26 @@ func Save(s *Session) error {
 	if err := shared.AtomicWrite(path, append(data, '\n'), 0o600); err != nil {
 		return err
 	}
+	return writeLastPointer(key)
+}
 
+// writeLastPointer points last.json at a storage key.
+func writeLastPointer(key string) error {
 	pointer, err := json.Marshal(lastPointer{Version: sessionVersion, Key: key})
 	if err != nil {
 		return fmt.Errorf("encoding last pointer: %w", err)
 	}
-	if err := shared.AtomicWrite(lastPath(), append(pointer, '\n'), 0o600); err != nil {
-		return err
-	}
-	return nil
+	return shared.AtomicWrite(lastPath(), append(pointer, '\n'), 0o600)
 }
 
-// Load reads a session from disk. An empty account follows the last-session
-// pointer.
+// Load reads a session. An empty account follows the last-session pointer.
 func Load(account string) (*Session, error) {
 	key, err := resolveKey(account)
 	if err != nil {
 		return nil, err
+	}
+	if useKeychain() {
+		return loadKeychain(key)
 	}
 	return loadByKey(key)
 }
@@ -182,14 +197,22 @@ func loadByKey(key string) (*Session, error) {
 	return &s, nil
 }
 
-// Delete removes the session file (and its .bak sibling) for an account.
-// An empty account follows the last-session pointer. If the deleted session
-// was the last one, the pointer is removed too.
+// Delete removes the stored session for an account. An empty account follows
+// the last-session pointer. If the deleted session was the last one, the
+// pointer is removed too.
 func Delete(account string) error {
 	key, err := resolveKey(account)
 	if err != nil {
 		return err
 	}
+	if useKeychain() {
+		return deleteKeychain(key)
+	}
+	return deleteFile(key)
+}
+
+// deleteFile removes the session file (and its .bak sibling) for a key.
+func deleteFile(key string) error {
 	path := sessionPath(key)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("no web session found for this account")
@@ -198,18 +221,25 @@ func Delete(account string) error {
 		return fmt.Errorf("removing session file: %w", err)
 	}
 	_ = os.Remove(path + ".bak")
+	clearLastPointer(key)
+	return nil
+}
 
+// clearLastPointer removes last.json when it points at key.
+func clearLastPointer(key string) {
 	if data, err := os.ReadFile(lastPath()); err == nil {
 		var p lastPointer
 		if json.Unmarshal(data, &p) == nil && p.Key == key {
 			_ = os.Remove(lastPath())
 		}
 	}
-	return nil
 }
 
-// DeleteAll removes all session files, backups, and the last-session pointer.
+// DeleteAll removes all stored sessions and the last-session pointer.
 func DeleteAll() error {
+	if useKeychain() {
+		return deleteAllKeychain()
+	}
 	dir := Dir()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -231,6 +261,15 @@ func DeleteAll() error {
 
 // List returns the account emails of all stored sessions, sorted.
 func List() ([]string, error) {
+	if useKeychain() {
+		return listKeychain()
+	}
+	return listFileEmails()
+}
+
+// listFileEmails returns the account emails of all plaintext session files,
+// sorted.
+func listFileEmails() ([]string, error) {
 	dir := Dir()
 	entries, err := os.ReadDir(dir)
 	if err != nil {

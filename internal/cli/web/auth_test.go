@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -351,6 +352,56 @@ func TestAuthStatus_Empty(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "[]") {
 		t.Errorf("output = %q, want empty list", stdout)
+	}
+}
+
+func TestAuthLogin_OutputsSessionStore(t *testing.T) {
+	useTempSessionDir(t)
+	mockWebClient(t, consoleMock(t))
+	cmd := AuthLoginCommand()
+	if err := cmd.FlagSet.Parse([]string{"--email", "me@example.com", "--cookies", "SID=sid; SAPISID=sapisid"}); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error {
+		return cmd.Exec(context.Background(), nil)
+	})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	// With GPLAY_WEB_SESSION_DIR set, the file backend reports the path.
+	wantPath := filepath.Join(os.Getenv("GPLAY_WEB_SESSION_DIR"),
+		"session-"+websession.AccountKey("me@example.com")+".json")
+	if !strings.Contains(stdout, `"session_store":"`+wantPath+`"`) {
+		t.Errorf("output missing session_store %s: %s", wantPath, stdout)
+	}
+	if strings.Contains(stdout, "session_file") {
+		t.Errorf("output should not contain session_file: %s", stdout)
+	}
+}
+
+func TestAuthStatus_OutputsSessionStore(t *testing.T) {
+	useTempSessionDir(t)
+	if err := websession.Save(&websession.Session{
+		UserEmail: "me@example.com",
+		Cookies:   map[string][]websession.Cookie{playOrigin: {{Name: "SAPISID", Value: "v"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cmd := AuthStatusCommand()
+	if err := cmd.FlagSet.Parse(nil); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := captureWebStdout(func() error {
+		return cmd.Exec(context.Background(), nil)
+	})
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !strings.Contains(stdout, `"session_store":"`) {
+		t.Errorf("output missing session_store: %s", stdout)
+	}
+	if strings.Contains(stdout, "session_file") {
+		t.Errorf("output should not contain session_file: %s", stdout)
 	}
 }
 

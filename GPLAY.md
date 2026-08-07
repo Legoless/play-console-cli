@@ -7638,7 +7638,9 @@ from a signed-in browser. This is SEPARATE from "gplay auth" service accounts
 and is required only for commands the official Android Publisher API does not
 support (such as listing every app in a developer account).
 
-Sessions are stored per account under ~/.gplay/web/ with 0600 permissions.
+Sessions are stored per account: in the macOS Keychain on macOS (cookies
+never touch disk), or as files with 0600 permissions under ~/.gplay/web/
+when GPLAY_WEB_SESSION_DIR is set or on other platforms.
 Cookies are secrets: treat them like passwords and never commit them.
 
 ---
@@ -7672,6 +7674,9 @@ Alternatively paste a JSON export from a cookie manager extension
 (Cookie-Editor, EditThisCookie); the format is auto-detected.
 
 The session is validated against the real Play Console before it is saved.
+On macOS it is stored in the macOS Keychain (service "gplay web session");
+with GPLAY_WEB_SESSION_DIR set, or on other platforms, as a 0600 file under
+~/.gplay/web/ instead.
 
 Examples:
   gplay web auth login --email me@example.com
