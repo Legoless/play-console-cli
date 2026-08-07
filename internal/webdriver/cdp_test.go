@@ -213,6 +213,22 @@ func TestJSString_EscapesInjection(t *testing.T) {
 	}
 }
 
+func TestJSString_EscapesSingleQuotes(t *testing.T) {
+	// JSON escaping leaves single quotes bare, but values can land inside
+	// single-quoted JS contexts (e.g. attribute selectors), where a bare '
+	// would terminate the literal early. JavaScript accepts \' inside any
+	// string literal, so it must be escaped explicitly.
+	for _, tc := range []struct{ in, want string }{
+		{"it's", `"it\'s"`},
+		{`a\'b`, `"a\\\'b"`},
+		{"plain", `"plain"`},
+	} {
+		if got := jsString(tc.in); got != tc.want {
+			t.Errorf("jsString(%q) = %s, want %s", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestAppIDFromURL(t *testing.T) {
 	m := appIDFromURL.FindStringSubmatch("/console/u/2/developers/690/app/4975550726849737454/app-dashboard")
 	if m == nil || m[1] != "4975550726849737454" {
