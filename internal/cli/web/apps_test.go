@@ -136,7 +136,7 @@ func TestWebAppsList_RefreshesExpiredSessionFromBrowserProfile(t *testing.T) {
 	useTempSessionDir(t)
 	saveWebSession(t, "me@example.com")
 	mockWebClient(t, expiringAppsMock(t, `{"1":[{"1":{"2":{"1":"555"}},"2":"Aérocoach","5":"com.unifiedsense.aerocoach"}]}`))
-	launches := stubBrowserSeams(t, validBrowserCookies())
+	launches, _ := stubBrowserSeams(t, validBrowserCookies())
 
 	cmd := WebAppsListCommand()
 	if err := cmd.FlagSet.Parse([]string{"--developer", authDeveloperID}); err != nil {

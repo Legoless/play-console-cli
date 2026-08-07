@@ -504,11 +504,12 @@ func validBrowserCookies() []map[string][]websession.Cookie {
 
 // stubBrowserSeams replaces the dedicated-profile seams. Each call to the
 // import seam returns the next entry in results (the last entry repeats), so a
-// test can model "cookies show up on the Nth poll". Returns a launch counter.
-func stubBrowserSeams(t *testing.T, results ...[]map[string][]websession.Cookie) *int {
+// test can model "cookies show up on the Nth poll". Returns the launch and
+// terminate counters for the interactive window.
+func stubBrowserSeams(t *testing.T, results ...[]map[string][]websession.Cookie) (launches, terminated *int) {
 	t.Helper()
-	origImport, origLaunch, origPoll := importChromeCookiesFrom, chromeLauncher, browserPollInterval
-	calls, launches := 0, 0
+	origImport, origLaunch, origPoll := importChromeCookiesFrom, interactiveLauncher, browserPollInterval
+	calls, launchCount, terminateCount := 0, 0, 0
 	importChromeCookiesFrom = func(ctx context.Context, dir string) ([]map[string][]websession.Cookie, error) {
 		r := results[min(calls, len(results)-1)]
 		calls++
@@ -517,12 +518,15 @@ func stubBrowserSeams(t *testing.T, results ...[]map[string][]websession.Cookie)
 		}
 		return r, nil
 	}
-	chromeLauncher = func(ctx context.Context, dir, url string) error { launches++; return nil }
+	interactiveLauncher = func(ctx context.Context, dir, url string) (func(), error) {
+		launchCount++
+		return func() { terminateCount++ }, nil
+	}
 	browserPollInterval = time.Millisecond
 	t.Cleanup(func() {
-		importChromeCookiesFrom, chromeLauncher, browserPollInterval = origImport, origLaunch, origPoll
+		importChromeCookiesFrom, interactiveLauncher, browserPollInterval = origImport, origLaunch, origPoll
 	})
-	return &launches
+	return &launchCount, &terminateCount
 }
 
 func TestWebAuthLogin_BrowserExcludesManualCookies(t *testing.T) {
@@ -540,7 +544,7 @@ func TestWebAuthLogin_BrowserExcludesManualCookies(t *testing.T) {
 func TestWebAuthLogin_BrowserReusesSignedInProfile(t *testing.T) {
 	useTempSessionDir(t)
 	mockWebClient(t, consoleMock(t))
-	launches := stubBrowserSeams(t, validBrowserCookies())
+	launches, terminated := stubBrowserSeams(t, validBrowserCookies())
 
 	cmd := AuthLoginCommand()
 	if err := cmd.FlagSet.Parse([]string{"--email", "me@example.com", "--browser"}); err != nil {
@@ -552,6 +556,9 @@ func TestWebAuthLogin_BrowserReusesSignedInProfile(t *testing.T) {
 	if *launches != 0 {
 		t.Errorf("launches = %d, want 0 (profile already signed in)", *launches)
 	}
+	if *terminated != 0 {
+		t.Errorf("terminated = %d, want 0 (no window was opened)", *terminated)
+	}
 	if _, err := websession.Load("me@example.com"); err != nil {
 		t.Errorf("session not saved: %v", err)
 	}
@@ -561,7 +568,7 @@ func TestWebAuthLogin_BrowserLaunchesAndWaitsForLogin(t *testing.T) {
 	useTempSessionDir(t)
 	mockWebClient(t, consoleMock(t))
 	// Empty profile, then still empty, then the user finishes signing in.
-	launches := stubBrowserSeams(t, nil, nil, validBrowserCookies())
+	launches, terminated := stubBrowserSeams(t, nil, nil, validBrowserCookies())
 
 	cmd := AuthLoginCommand()
 	if err := cmd.FlagSet.Parse([]string{"--email", "me@example.com", "--browser"}); err != nil {
@@ -573,6 +580,9 @@ func TestWebAuthLogin_BrowserLaunchesAndWaitsForLogin(t *testing.T) {
 	if *launches != 1 {
 		t.Errorf("launches = %d, want exactly 1", *launches)
 	}
+	if *terminated != 1 {
+		t.Errorf("terminated = %d, want 1 (window closed once the session landed)", *terminated)
+	}
 	if _, err := websession.Load("me@example.com"); err != nil {
 		t.Errorf("session not saved: %v", err)
 	}
@@ -581,7 +591,7 @@ func TestWebAuthLogin_BrowserLaunchesAndWaitsForLogin(t *testing.T) {
 func TestWebAuthLogin_BrowserTimesOut(t *testing.T) {
 	useTempSessionDir(t)
 	mockWebClient(t, consoleMock(t))
-	stubBrowserSeams(t, nil)
+	_, terminated := stubBrowserSeams(t, nil)
 
 	cmd := AuthLoginCommand()
 	if err := cmd.FlagSet.Parse([]string{"--email", "me@example.com", "--browser", "--browser-timeout", "20ms"}); err != nil {
@@ -590,5 +600,8 @@ func TestWebAuthLogin_BrowserTimesOut(t *testing.T) {
 	err := cmd.Exec(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Errorf("err = %v, want timeout error", err)
+	}
+	if *terminated != 0 {
+		t.Errorf("terminated = %d, want 0 (window left for the user to finish signing in)", *terminated)
 	}
 }

@@ -1,9 +1,11 @@
 package websession
 
 import (
+	"context"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -127,5 +129,71 @@ func TestChromeCookies_RejectsPlaintextAndEncrypted(t *testing.T) {
 	}}, make([]byte, 16), time.Now())
 	if err == nil || !strings.Contains(err.Error(), "both plaintext and encrypted") {
 		t.Fatalf("chromeCookies() error = %v", err)
+	}
+}
+
+// recordLaunchStub writes a fake "Chrome" shell script that records its argv
+// to recordPath and exits, and points Chrome discovery at it.
+func recordLaunchStub(t *testing.T, recordPath string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub")
+	}
+	oldGOOS := hostGOOS
+	hostGOOS = "darwin" // exercise the launch path on any CI platform
+	t.Cleanup(func() { hostGOOS = oldGOOS })
+
+	stub := filepath.Join(t.TempDir(), "chrome-stub")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"" + recordPath + "\"\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(chromeBinaryEnv, stub)
+}
+
+func readRecordedArgs(t *testing.T, recordPath string) string {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		data, err := os.ReadFile(recordPath)
+		if err == nil {
+			return string(data)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stub did not record args: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestLaunchInteractiveChrome_OmitsDebugPort(t *testing.T) {
+	record := filepath.Join(t.TempDir(), "args")
+	recordLaunchStub(t, record)
+
+	terminate, err := LaunchInteractiveChrome(context.Background(), t.TempDir(), "https://example.com")
+	if err != nil {
+		t.Fatalf("LaunchInteractiveChrome: %v", err)
+	}
+	args := readRecordedArgs(t, record)
+	if strings.Contains(args, "--remote-debugging-port") || strings.Contains(args, "--remote-allow-origins") {
+		t.Errorf("interactive launch must not expose DevTools, got args:\n%s", args)
+	}
+	if !strings.Contains(args, "--user-data-dir=") {
+		t.Errorf("interactive launch missing user-data-dir, got args:\n%s", args)
+	}
+	// The stub exits at once, so terminate must tolerate a dead process.
+	terminate()
+}
+
+func TestLaunchChrome_EnablesDebugPort(t *testing.T) {
+	record := filepath.Join(t.TempDir(), "args")
+	recordLaunchStub(t, record)
+
+	if err := LaunchChrome(context.Background(), t.TempDir(), "https://example.com"); err != nil {
+		t.Fatalf("LaunchChrome: %v", err)
+	}
+	args := readRecordedArgs(t, record)
+	if !strings.Contains(args, "--remote-debugging-port=0") {
+		t.Errorf("driver launch must enable the DevTools port, got args:\n%s", args)
 	}
 }

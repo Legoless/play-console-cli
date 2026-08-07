@@ -191,6 +191,23 @@ func TestLaunchArgs_IncludesDebugPort(t *testing.T) {
 	}
 }
 
+func TestInteractiveArgs_ExcludeDebugPort(t *testing.T) {
+	// An interactive window holds a live Google session; it must not expose a
+	// DevTools endpoint for other local processes to drive it with.
+	args := InteractiveArgs("/tmp/profile")
+	joined := fmt.Sprint(args)
+	for _, unwanted := range []string{"--remote-debugging-port", "--remote-allow-origins"} {
+		if strings.Contains(joined, unwanted) {
+			t.Errorf("interactive args %v must not contain %q", args, unwanted)
+		}
+	}
+	for _, want := range []string{"--user-data-dir=/tmp/profile", "--no-first-run"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("interactive args %v missing %q", args, want)
+		}
+	}
+}
+
 func TestFillAppForm_RejectsNonDefaultLanguage(t *testing.T) {
 	err := FillAppForm(context.Background(), nil, "dev1", AppForm{Language: "de-DE"})
 	if err == nil || !strings.Contains(err.Error(), "en-US") {

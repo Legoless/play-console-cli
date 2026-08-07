@@ -43,6 +43,7 @@ var (
 	importChromeCookies     = websession.ImportChromeCookies
 	importChromeCookiesFrom = websession.ImportChromeCookiesFrom
 	chromeLauncher          = websession.LaunchChrome
+	interactiveLauncher     = websession.LaunchInteractiveChrome
 	readStdin               = func() ([]byte, error) { return io.ReadAll(os.Stdin) }
 )
 
@@ -112,7 +113,8 @@ With --browser, gplay instead opens a Chrome window it controls, backed by its
 own profile under ~/.gplay/web/browser. Sign in there once: the profile keeps
 that login, so later runs reuse it without opening a window and without
 touching your everyday Chrome profiles. If the profile is still signed in,
---browser refreshes the session silently.
+--browser refreshes the session silently. The window opens with no DevTools
+port and closes itself once sign-in completes.
 
 To provide cookies manually instead:
   1. Sign in to https://play.google.com/console in your browser.
@@ -331,19 +333,21 @@ func pickValidCandidate(ctx context.Context, email string, candidates []map[stri
 
 // browserLogin drives the dedicated Chrome profile: reuse it when it is still
 // signed in, otherwise open a visible window and poll the profile until the
-// sign-in completes. The window is left open on purpose so the profile keeps
-// the session for later runs.
+// sign-in completes. The window opens without a DevTools port — it holds a
+// live Google session, and DevTools has no authentication — and is closed once
+// the session lands. The profile on disk keeps the sign-in for later runs.
 func browserLogin(ctx context.Context, email string, timeout time.Duration) (*websession.Session, map[string][]websession.Cookie, string, error) {
 	dir := websession.BrowserProfileDir()
 	if sess, byOrigin, developerID, err := browserAttempt(ctx, email, dir); err == nil {
 		return sess, byOrigin, developerID, nil
 	}
 
-	if err := chromeLauncher(ctx, dir, consoleLoginURL); err != nil {
+	terminate, err := interactiveLauncher(ctx, dir, consoleLoginURL)
+	if err != nil {
 		return nil, nil, "", err
 	}
-	fmt.Fprintf(os.Stderr, "Opened a gplay-controlled Chrome window; sign in as %s.\n", email) // #nosec G705 -- stderr log
-	fmt.Fprintf(os.Stderr, "Profile: %s (kept signed in, so this is a one-time step)\n", dir)  // #nosec G705 -- stderr log
+	fmt.Fprintf(os.Stderr, "Opened a gplay-controlled Chrome window; sign in as %s. The window closes when sign-in completes.\n", email) // #nosec G705 -- stderr log
+	fmt.Fprintf(os.Stderr, "Profile: %s (kept signed in, so this is a one-time step)\n", dir)                                            // #nosec G705 -- stderr log
 
 	deadline := time.Now().Add(timeout)
 	for {
@@ -353,6 +357,7 @@ func browserLogin(ctx context.Context, email string, timeout time.Duration) (*we
 		case <-time.After(browserPollInterval):
 		}
 		if sess, byOrigin, developerID, err := browserAttempt(ctx, email, dir); err == nil {
+			terminate() // close the window we opened: it now holds a live session
 			return sess, byOrigin, developerID, nil
 		}
 		if time.Now().After(deadline) {

@@ -7662,7 +7662,8 @@ With --browser, gplay instead opens a Chrome window it controls, backed by its
 own profile under ~/.gplay/web/browser. Sign in there once: the profile keeps
 that login, so later runs reuse it without opening a window and without
 touching your everyday Chrome profiles. If the profile is still signed in,
---browser refreshes the session silently.
+--browser refreshes the session silently. The window opens with no DevTools
+port and closes itself once sign-in completes.
 
 To provide cookies manually instead:
   1. Sign in to https://play.google.com/console in your browser.
