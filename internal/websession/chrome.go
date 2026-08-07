@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tamtom/play-console-cli/internal/webdriver"
@@ -322,27 +323,65 @@ func chromeBinary() (string, error) {
 	return "", fmt.Errorf("no Google Chrome install found; install it or set %s to the executable path", chromeBinaryEnv)
 }
 
-// LaunchChrome opens a visible Chrome window bound to its own user-data
-// directory. The process is deliberately detached from this command: the
-// window must stay open while the user signs in, and the profile it writes is
-// what later imports read.
+// LaunchChrome opens a visible Chrome window that later commands can drive
+// over the DevTools protocol (see internal/webdriver). The process is
+// deliberately detached from this command: the window outlives the command so
+// the user can review what the driver staged.
 func LaunchChrome(ctx context.Context, userDataDir, startURL string) error {
-	binary, err := chromeBinary()
+	cmd, err := startChrome(userDataDir, startURL, webdriver.LaunchArgs(userDataDir))
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(userDataDir, 0o700); err != nil {
-		return fmt.Errorf("creating Chrome profile directory: %w", err)
-	}
-	// Not CommandContext: the window outlives the login command on purpose.
-	// The DevTools port is always enabled so later commands can drive this
-	// profile (see internal/webdriver).
-	cmd := exec.Command(binary, append(webdriver.LaunchArgs(userDataDir), startURL)...) // #nosec G204 -- path is a fixed location or operator-set env override
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("launching Chrome: %w", err)
-	}
 	go func() { _ = cmd.Wait() }() // reap the child without blocking
 	return nil
+}
+
+// LaunchInteractiveChrome opens a visible Chrome window for the user to drive
+// themselves (sign-in). It deliberately opens no DevTools port: the window
+// holds a live Google session, DevTools has no authentication, and any local
+// process that read DevToolsActivePort could drive that session for as long
+// as the window stayed open. The returned function closes the window
+// gracefully; it tolerates the process having already exited (a second launch
+// against the same user-data-dir forwards to the running Chrome and exits).
+func LaunchInteractiveChrome(ctx context.Context, userDataDir, startURL string) (terminate func(), err error) {
+	cmd, err := startChrome(userDataDir, startURL, webdriver.InteractiveArgs(userDataDir))
+	if err != nil {
+		return nil, err
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			_ = terminateChrome(cmd.Process) // best effort: may already be gone
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				_ = cmd.Process.Kill()
+				<-done
+			}
+		})
+	}, nil
+}
+
+// startChrome launches Chrome with the given flags bound to its own user-data
+// directory. Not CommandContext: the window outlives the command on purpose.
+func startChrome(userDataDir, startURL string, args []string) (*exec.Cmd, error) {
+	binary, err := chromeBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(userDataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("creating Chrome profile directory: %w", err)
+	}
+	cmd := exec.Command(binary, append(args, startURL)...) // #nosec G204 -- path is a fixed location or operator-set env override
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("launching Chrome: %w", err)
+	}
+	return cmd, nil
 }
 
 func isSAPISIDName(name string) bool {

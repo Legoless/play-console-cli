@@ -133,16 +133,20 @@ Keychain for `Chrome Safe Storage` access. Sign in at
 <https://play.google.com/console> first. Other platforms can use either manual
 cookie option.
 
-Sessions are stored per account under `~/.gplay/web/` (0600 files, 0700 dir;
-override with `GPLAY_WEB_SESSION_DIR`) and are validated against the real
-console at login. Cookies are secrets — treat them like passwords, never
-commit them, and expect them to expire; re-run `web auth login` when commands
-start failing with auth errors.
+On macOS, sessions are stored in the macOS Keychain (service `gplay web
+session`) — cookies never touch disk; `~/.gplay/web/` holds only the
+`last.json`/`index.json` metadata files (0600 files, 0700 dir). On other
+platforms, or when `GPLAY_WEB_SESSION_DIR` is set, sessions are stored as
+per-account files under `~/.gplay/web/` instead; the variable is also the
+escape hatch when the Keychain is locked or unavailable (headless CI).
+Sessions are validated against the real console at login. Cookies are
+secrets — treat them like passwords, never commit them, and expect them to
+expire; re-run `web auth login` when commands start failing with auth errors.
 
 ## Security best practices
 
 - **Never commit service account keys** to version control
-- **Never commit web session cookies** (`~/.gplay/web/`) either — they grant full console access
+- **Never commit web session cookies** — on macOS they live in the Keychain, but with file storage (`GPLAY_WEB_SESSION_DIR` or other platforms) they sit under `~/.gplay/web/`; either way they grant full console access
 - **Use environment variables** or secrets management in CI/CD
 - **Limit service account permissions** to only what's needed
 - **Rotate keys regularly**

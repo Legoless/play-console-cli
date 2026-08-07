@@ -339,10 +339,16 @@ func (b *Browser) EvalUntil(ctx context.Context, expression string, timeout time
 
 // LaunchArgs returns the Chrome flags needed for a driveable instance.
 func LaunchArgs(userDataDir string) []string {
+	return append(InteractiveArgs(userDataDir), DebugPortArg, AllowOriginArg)
+}
+
+// InteractiveArgs returns the Chrome flags for a window the user drives
+// themselves (sign-in). No DevTools port: while that window holds a live
+// Google session, an open debug endpoint would let any local process that
+// reads DevToolsActivePort drive the session.
+func InteractiveArgs(userDataDir string) []string {
 	return []string{
 		"--user-data-dir=" + userDataDir,
-		DebugPortArg,
-		AllowOriginArg,
 		"--no-first-run",
 		"--no-default-browser-check",
 	}

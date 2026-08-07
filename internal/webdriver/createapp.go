@@ -65,10 +65,13 @@ const formHelpers = `
 })()
 `
 
-// jsString renders a Go string as a JavaScript literal.
+// jsString renders a Go string as a JavaScript literal. On top of JSON
+// escaping it also escapes single quotes: values can land inside
+// single-quoted JS contexts (e.g. attribute selectors), which JSON leaves
+// unprotected, and \' is valid inside any JavaScript string literal.
 func jsString(s string) string {
 	b, _ := json.Marshal(s)
-	return string(b)
+	return strings.ReplaceAll(string(b), "'", `\'`)
 }
 
 // createAppURL is the console's create-app route for a developer account.
