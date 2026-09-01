@@ -114,6 +114,17 @@ const setPricingClickScript = `(() => {
   return true;
 })()`
 
+// pricingCountryPickerEmptyScript reports that the country picker opened but
+// listed no rows. Play only offers the countries the app actually targets with
+// a release, so an app with no published release gets an empty table and the
+// wizard can never be completed (proven against the live console).
+const pricingCountryPickerEmptyScript = `(() => {
+  const bar = document.querySelector('[debug-id=bulk-price-edit-bottom-bar]');
+  const open = !!bar && /select countries \/ regions/i.test(bar.innerText || '');
+  const rows = document.querySelectorAll('mat-checkbox[role=checkbox], [role=checkbox]').length;
+  return open && rows === 0;
+})()`
+
 const pricingCountryTableReadyScript = `!!document.querySelector('mat-checkbox[aria-label="Select all rows"]')`
 
 // pricingSelectionCountedScript waits for the console's own "N countries /
@@ -251,6 +262,11 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 		return fmt.Errorf(`"Set pricing" button was missing or disabled`)
 	}
 	if err := b.EvalUntil(ctx, pricingCountryTableReadyScript, 30*time.Second); err != nil {
+		var empty bool
+		if e2 := b.Eval(ctx, pricingCountryPickerEmptyScript, &empty); e2 == nil && empty {
+			return fmt.Errorf("the country / region table is empty: Play prices only the countries " +
+				"your app targets with a release, so publish a release before setting a price")
+		}
 		return fmt.Errorf("country selection did not open: %w", err)
 	}
 	if err := settle(ctx, pricingStepSettle); err != nil {
