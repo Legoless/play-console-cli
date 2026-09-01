@@ -114,10 +114,13 @@ const setPricingClickScript = `(() => {
   return true;
 })()`
 
-// pricingCountryPickerEmptyScript reports that the country picker opened but
-// listed no rows. Play only offers the countries the app actually targets with
-// a release, so an app with no published release gets an empty table and the
-// wizard can never be completed (proven against the live console).
+// pricingCountryPickerEmptyScript reports that the price wizard opened but
+// rendered no country rows: the bottom bar and the search box are present and
+// the table is not. Observed against the live console on both an unreleased
+// app and a published, priced one, with no rows in light DOM, shadow roots or
+// iframes, and none produced by scrolling or searching. The wizard cannot be
+// completed from this state, so callers are told to use the console UI rather
+// than left waiting on a checkbox that never appears.
 const pricingCountryPickerEmptyScript = `(() => {
   const bar = document.querySelector('[debug-id=bulk-price-edit-bottom-bar]');
   const open = !!bar && /select countries \/ regions/i.test(bar.innerText || '');
@@ -264,8 +267,8 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 	if err := b.EvalUntil(ctx, pricingCountryTableReadyScript, 30*time.Second); err != nil {
 		var empty bool
 		if e2 := b.Eval(ctx, pricingCountryPickerEmptyScript, &empty); e2 == nil && empty {
-			return fmt.Errorf("the country / region table is empty: Play prices only the countries " +
-				"your app targets with a release, so publish a release before setting a price")
+			return fmt.Errorf("the price wizard opened but rendered no country / region rows, " +
+				"so the selection step cannot be completed; set the price in the Play Console UI")
 		}
 		return fmt.Errorf("country selection did not open: %w", err)
 	}
