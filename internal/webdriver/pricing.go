@@ -115,12 +115,13 @@ const setPricingClickScript = `(() => {
 })()`
 
 // pricingCountryPickerEmptyScript reports that the price wizard opened but
-// rendered no country rows: the bottom bar and the search box are present and
-// the table is not. Observed against the live console on both an unreleased
-// app and a published, priced one, with no rows in light DOM, shadow roots or
-// iframes, and none produced by scrolling or searching. The wizard cannot be
-// completed from this state, so callers are told to use the console UI rather
-// than left waiting on a checkbox that never appears.
+// rendered no country rows. The table lists only the countries the app targets
+// through a *published* release and its rows are search-driven, so an app whose
+// only production release is still a draft has nothing to select no matter what
+// is typed. Verified against the live console: two published apps render rows
+// for a searched country, an app with a draft-only production release renders
+// none. Continue stays disabled without a selection, so the wizard cannot be
+// completed from this state.
 const pricingCountryPickerEmptyScript = `(() => {
   const bar = document.querySelector('[debug-id=bulk-price-edit-bottom-bar]');
   const open = !!bar && /select countries \/ regions/i.test(bar.innerText || '');
@@ -267,8 +268,8 @@ func SetAppPrice(ctx context.Context, b *Browser, price string) error {
 	if err := b.EvalUntil(ctx, pricingCountryTableReadyScript, 30*time.Second); err != nil {
 		var empty bool
 		if e2 := b.Eval(ctx, pricingCountryPickerEmptyScript, &empty); e2 == nil && empty {
-			return fmt.Errorf("the price wizard opened but rendered no country / region rows, " +
-				"so the selection step cannot be completed; set the price in the Play Console UI")
+			return fmt.Errorf("the price wizard rendered no country / region rows: Play lists only " +
+				"countries targeted by a published release, so publish the release before pricing")
 		}
 		return fmt.Errorf("country selection did not open: %w", err)
 	}
