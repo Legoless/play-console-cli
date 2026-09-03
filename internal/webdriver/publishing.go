@@ -196,19 +196,31 @@ const sendForReviewClickScript = `(() => {
   return true;
 })()`
 
+// A ".pane.modal.visible" node exists before the confirmation renders into it,
+// so waiting on the node alone returns while the dialog is still empty and the
+// confirm step then finds no buttons. Wait for a dialog that actually offers an
+// enabled confirm button. The changes section is also hidden while the overlay
+// is up, so a missing section only means "settled" when no dialog is on screen.
 const sendForReviewDialogPresentScript = `(() => {
   const p = window.__gplayPublish;
-  if (p && !p.section()) return true; // page already settled, no dialog coming
-  return !!document.querySelector('.pane.modal.visible');
+  const vis = el => el.getClientRects().length > 0;
+  const dialogs = [...document.querySelectorAll('.pane.modal.visible, .pane.modal, [role=dialog], material-dialog')].filter(vis);
+  const actionable = dialogs.some(d => [...d.querySelectorAll('button')].some(b =>
+    vis(b) && !b.disabled && /send|confirm|got it|^ok$|submit/i.test(b.textContent)));
+  if (actionable) return true;
+  if (p && !p.section() && !dialogs.length) return true;
+  return false;
 })()`
 
 // The confirmation is a .pane.modal dialog ("Send N changes for review?")
 // with Cancel and "Send changes for review" buttons — not a [role=dialog].
 const sendForReviewConfirmScript = `(() => {
-  const d = document.querySelector('.pane.modal.visible');
-  if (!d) return 'none';
+  const vis = el => el.getClientRects().length > 0;
+  const dialogs = [...document.querySelectorAll('.pane.modal.visible, .pane.modal, [role=dialog], material-dialog')].filter(vis);
+  if (!dialogs.length) return 'none';
+  const d = dialogs.find(x => [...x.querySelectorAll('button')].some(b => vis(b) && !b.disabled)) || dialogs[0];
   const btn = [...d.querySelectorAll('button')].find(b =>
-    !b.disabled && /send|confirm|got it|^ok$/i.test(b.textContent));
+    !b.disabled && vis(b) && /send|confirm|got it|^ok$|submit/i.test(b.textContent));
   if (!btn) return 'no-button';
   btn.click();
   return 'confirmed';
@@ -216,9 +228,13 @@ const sendForReviewConfirmScript = `(() => {
 
 const sendForReviewClickWait = formHelpers + ` && ` + publishHelpers + ` && ` + sendForReviewClickScript
 
+// A submitted change keeps its row on the overview while Google reviews it, so
+// waiting for the list to empty reports failure on a submission that actually
+// succeeded. Treat the console's own "changes in review" state as settled too.
 const sendForReviewSettledScript = `(() => {
   const p = window.__gplayPublish;
   if (!p) return false;
+  if (p.inReview()) return true;
   const s = p.section();
   return !s || p.changes().length === 0;
 })()`
@@ -238,7 +254,9 @@ func SendForReview(ctx context.Context, b *Browser, timeout time.Duration) error
 	}
 	// The confirmation dialog appears asynchronously, or not at all when the
 	// console submits directly. Wait briefly for it but tolerate its absence.
-	_ = b.EvalUntil(ctx, sendForReviewDialogPresentScript, 10*time.Second) //nolint:errcheck // absence is fine
+	// The console runs pre-submit quick checks before opening the confirmation,
+	// which can take far longer than a few seconds.
+	_ = b.EvalUntil(ctx, sendForReviewDialogPresentScript, 90*time.Second) //nolint:errcheck // absence is fine
 	var confirm string
 	if err := b.Eval(ctx, sendForReviewConfirmScript, &confirm); err != nil {
 		return err
